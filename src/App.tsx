@@ -128,7 +128,7 @@ const Sidebar: React.FC<{
 const OverviewTab: React.FC<{
     activities: Activity[];
     loading: boolean;
-    onAddActivity: (a: Activity) => void;
+    onAddActivity: (a: Activity) => Promise<boolean>;
     onDeleteActivity: (id: string) => void;
 }> = ({ activities, loading, onAddActivity, onDeleteActivity }) => {
 
@@ -213,7 +213,6 @@ const OverviewTab: React.FC<{
                 };
                 return onAddActivity(activity);
             }} />
-
             {/* Notifications */}
             <DailyProblemNotification />
         </div>
