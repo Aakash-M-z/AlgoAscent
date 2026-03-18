@@ -83,61 +83,56 @@ const DailyMotivation: React.FC = () => {
 
   if (!isVisible) return null;
 
+  const currentIndex = MOTIVATION_QUOTES.findIndex(q => q.text === currentQuote.text);
+
   return (
-    <div className="relative mb-6 overflow-hidden">
-      <div className={`bg-gradient-to-r ${currentQuote.color} rounded-2xl p-6 text-white shadow-2xl transform transition-all duration-500 ${isAnimating ? 'scale-95 opacity-80' : 'scale-100 opacity-100'} border border-yellow-500/20`}>
-        {/* Animated background elements with golden theme */}
-        <div className="absolute inset-0 overflow-hidden">
-          <div className="absolute -top-4 -right-4 w-24 h-24 bg-gradient-to-br from-yellow-500/20 to-yellow-600/10 rounded-full animate-float blur-xl"></div>
-          <div className="absolute -bottom-6 -left-6 w-32 h-32 bg-gradient-to-br from-yellow-400/15 to-amber-500/10 rounded-full animate-pulse blur-2xl"></div>
-          <div className="absolute top-1/2 right-1/4 w-16 h-16 bg-yellow-500/20 rounded-full animate-float blur-lg" style={{ animationDelay: '1s', animationDuration: '4s' }}></div>
-          <div className="absolute top-1/4 left-1/3 w-20 h-20 bg-amber-400/10 rounded-full animate-pulse blur-xl" style={{ animationDelay: '0.5s' }}></div>
+    <div
+      className={`relative overflow-hidden transition-all duration-500 ${isAnimating ? 'scale-95 opacity-80' : 'scale-100 opacity-100'}`}
+      style={{
+        background: 'linear-gradient(135deg, #161616 0%, #1a1a1a 100%)',
+        border: '1px solid rgba(212,175,55,0.3)',
+        borderRadius: '16px',
+        padding: '20px 24px',
+        boxShadow: '0 4px 24px rgba(0,0,0,0.4), 0 0 20px rgba(212,175,55,0.06)',
+      }}
+    >
+      {/* Subtle glow bg */}
+      <div style={{ position: 'absolute', top: '-20px', right: '-20px', width: '120px', height: '120px', background: 'radial-gradient(circle, rgba(212,175,55,0.08) 0%, transparent 70%)', borderRadius: '50%', pointerEvents: 'none' }} />
+      <div style={{ position: 'absolute', bottom: '-20px', left: '-20px', width: '100px', height: '100px', background: 'radial-gradient(circle, rgba(212,175,55,0.05) 0%, transparent 70%)', borderRadius: '50%', pointerEvents: 'none' }} />
+
+      <div style={{ position: 'relative', zIndex: 1 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <span style={{ fontSize: '1.6rem' }}>{currentQuote.icon}</span>
+            <div>
+              <h3 style={{ fontSize: '0.85rem', fontWeight: 700, color: '#D4AF37', textTransform: 'uppercase', letterSpacing: '0.1em', margin: 0 }}>Daily Motivation</h3>
+              <p style={{ fontSize: '0.75rem', color: '#555', margin: 0 }}>Hello, {user?.name?.split(' ')[0]}!</p>
+            </div>
+          </div>
+          <button
+            onClick={() => setIsVisible(false)}
+            style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: '6px', padding: '4px 8px', color: '#555', cursor: 'pointer', fontSize: '0.75rem', transition: 'all 0.2s ease' }}
+            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = '#D4AF37'; }}
+            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = '#555'; }}
+          >
+            ✕
+          </button>
         </div>
 
-        <div className="relative z-10">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-3">
-              <div className="text-4xl animate-bounce">{currentQuote.icon}</div>
-              <div>
-                <h3 className="text-xl font-bold animate-text-glow">Daily Motivation</h3>
-                <p className="text-white/80 text-sm">Hello, {user?.name?.split(' ')[0]}! 👋</p>
-              </div>
-            </div>
-            <button
-              onClick={() => setIsVisible(false)}
-              className="text-white/70 hover:text-white p-2 rounded-full hover:bg-white/20 transition-all duration-200"
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-          </div>
+        <div style={{ transition: 'all 0.3s ease', opacity: isAnimating ? 0 : 1, transform: isAnimating ? 'translateY(8px)' : 'translateY(0)' }}>
+          <p style={{ fontSize: '1rem', fontStyle: 'italic', color: '#EAEAEA', lineHeight: 1.6, marginBottom: '8px' }}>
+            "{currentQuote.text}"
+          </p>
+          <p style={{ fontSize: '0.8rem', color: '#D4AF37', fontWeight: 600 }}>— {currentQuote.author}</p>
+        </div>
 
-          <div className={`transition-all duration-300 ${isAnimating ? 'opacity-0 transform translate-y-4' : 'opacity-100 transform translate-y-0'}`}>
-            <blockquote className="text-lg font-medium mb-3 italic animate-text-glow">
-              "{currentQuote.text}"
-            </blockquote>
-            <cite className="text-white/90 text-sm font-semibold text-shadow-sm">
-              — {currentQuote.author}
-            </cite>
+        <div style={{ marginTop: '14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div style={{ display: 'flex', gap: '6px' }}>
+            {MOTIVATION_QUOTES.map((_, i) => (
+              <div key={i} style={{ width: '6px', height: '6px', borderRadius: '50%', background: i === currentIndex ? '#D4AF37' : 'rgba(212,175,55,0.2)', transition: 'background 0.3s ease' }} />
+            ))}
           </div>
-
-          <div className="mt-4 flex items-center justify-between">
-            <div className="flex space-x-2">
-              {MOTIVATION_QUOTES.map((_, index) => (
-                <div
-                  key={index}
-                  className={`w-2 h-2 rounded-full transition-all duration-300 ${index === MOTIVATION_QUOTES.findIndex(q => q.text === currentQuote.text)
-                    ? 'bg-white'
-                    : 'bg-white/40'
-                    }`}
-                />
-              ))}
-            </div>
-            <div className="text-white/70 text-xs">
-              Auto-rotating every 15s
-            </div>
-          </div>
+          <span style={{ fontSize: '0.65rem', color: '#444' }}>Auto-rotating every 15s</span>
         </div>
       </div>
     </div>
