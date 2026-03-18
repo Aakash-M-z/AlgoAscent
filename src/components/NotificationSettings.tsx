@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 
 interface NotificationSettingsProps {
-  onTriggerDailyProblem: () => void;
+  onTriggerDailyProblem?: () => void;
 }
 
 const NotificationSettings: React.FC<NotificationSettingsProps> = ({ onTriggerDailyProblem }) => {
@@ -38,7 +38,7 @@ const NotificationSettings: React.FC<NotificationSettingsProps> = ({ onTriggerDa
       const today = new Date().toDateString();
       localStorage.removeItem(`dailyProblem_${user.id}_dismissed_${today}`);
       localStorage.removeItem(`dailyProblem_${user.id}_lastShown`);
-      onTriggerDailyProblem();
+      onTriggerDailyProblem?.();
     }
   };
 
@@ -57,7 +57,7 @@ const NotificationSettings: React.FC<NotificationSettingsProps> = ({ onTriggerDa
               <span className="hidden group-hover:block text-sm font-medium whitespace-nowrap">Today's Challenge</span>
             </div>
           </button>
-          
+
           <button
             onClick={() => setShowSettings(true)}
             className="bg-gradient-to-r from-blue-500 to-purple-600 text-white p-3 rounded-full shadow-lg hover:from-blue-600 hover:to-purple-700 transform hover:scale-110 transition-all duration-200"
