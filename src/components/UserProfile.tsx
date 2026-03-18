@@ -1,254 +1,160 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useMemo } from 'react';
 import { Activity } from '../types';
+import { useAuth } from '../contexts/AuthContext';
 
-interface UserProfileProps {
-  activities: Activity[];
-}
+interface Props { activities?: Activity[]; }
 
-type SkillLevel = 'beginner' | 'intermediate' | 'advanced';
-
-interface LevelCriteria {
-  level: SkillLevel;
-  minProblems: number;
-  minTopics: number;
-  minStreak: number;
-  title: string;
-  description: string;
-  icon: string;
-  color: string;
-  bgColor: string;
-}
-
-const LEVEL_CRITERIA: LevelCriteria[] = [
-  {
-    level: 'beginner',
-    minProblems: 0,
-    minTopics: 0,
-    minStreak: 0,
-    title: 'Beginner',
-    description: 'Just getting started with DSA journey',
-    icon: '🌱',
-    color: 'text-green-600 dark:text-green-400',
-    bgColor: 'from-green-100 to-emerald-100 dark:from-green-900/30 dark:to-emerald-900/30'
-  },
-  {
-    level: 'intermediate',
-    minProblems: 15,
-    minTopics: 4,
-    minStreak: 3,
-    title: 'Intermediate',
-    description: 'Making solid progress in problem solving',
-    icon: '🚀',
-    color: 'text-blue-600 dark:text-blue-400',
-    bgColor: 'from-blue-100 to-indigo-100 dark:from-blue-900/30 dark:to-indigo-900/30'
-  },
-  {
-    level: 'advanced',
-    minProblems: 50,
-    minTopics: 8,
-    minStreak: 7,
-    title: 'Advanced',
-    description: 'Expert problem solver with consistent practice',
-    icon: '👑',
-    color: 'text-purple-600 dark:text-purple-400',
-    bgColor: 'from-purple-100 to-violet-100 dark:from-purple-900/30 dark:to-violet-900/30'
-  }
+const LEVELS = [
+    { key: 'beginner', label: 'Beginner', icon: '🌱', minProblems: 0, minTopics: 0, minStreak: 0, color: '#22c55e' },
+    { key: 'intermediate', label: 'Intermediate', icon: '🚀', minProblems: 15, minTopics: 4, minStreak: 3, color: '#3b82f6' },
+    { key: 'advanced', label: 'Advanced', icon: '👑', minProblems: 50, minTopics: 8, minStreak: 7, color: '#D4AF37' },
 ];
 
-const UserProfile: React.FC<UserProfileProps> = ({ activities }) => {
-  const [currentLevel, setCurrentLevel] = useState<LevelCriteria>(LEVEL_CRITERIA[0]);
-  const [nextLevel, setNextLevel] = useState<LevelCriteria | null>(null);
-  const [progress, setProgress] = useState(0);
-
-  useEffect(() => {
-    const totalProblems = activities.filter(a => a.problemSolved).length;
-    const totalTopics = new Set(activities.map(a => a.category)).size;
-
-    // Calculate streak
-    const uniqueDates = [...new Set(activities.filter(a => a.date && typeof a.date === 'string').map(a => a.date.split('T')[0]))].sort((a, b) => new Date(b).getTime() - new Date(a).getTime());
-    let streak = 0;
-    const today = new Date().toISOString().split('T')[0];
-    if (uniqueDates.includes(today)) {
-      streak = 1;
-      for (let i = 1; i < uniqueDates.length; i++) {
-        const currentDate = new Date(uniqueDates[i - 1]);
-        const prevDate = new Date(uniqueDates[i]);
-        const diffDays = Math.floor((currentDate.getTime() - prevDate.getTime()) / (1000 * 60 * 60 * 24));
-        if (diffDays === 1) streak++;
-        else break;
-      }
+function calcStreak(activities: Activity[]): number {
+    const dates = [...new Set(activities.map(a => a.date.slice(0, 10)))].sort((a, b) => b > a ? 1 : -1);
+    const today = new Date().toISOString().slice(0, 10);
+    const yesterday = new Date(Date.now() - 864e5).toISOString().slice(0, 10);
+    if (!dates.length || (dates[0] !== today && dates[0] !== yesterday)) return 0;
+    let s = 1;
+    for (let i = 1; i < dates.length; i++) {
+        const diff = Math.round((new Date(dates[i - 1]).getTime() - new Date(dates[i]).getTime()) / 864e5);
+        if (diff === 1) s++; else break;
     }
+    return s;
+}
 
-    // Determine current level
-    let level = LEVEL_CRITERIA[0];
-    for (let i = LEVEL_CRITERIA.length - 1; i >= 0; i--) {
-      const criteria = LEVEL_CRITERIA[i];
-      if (totalProblems >= criteria.minProblems &&
-        totalTopics >= criteria.minTopics &&
-        streak >= criteria.minStreak) {
-        level = criteria;
-        break;
-      }
-    }
+const UserProfile: React.FC<Props> = ({ activities = [] }) => {
+    const { user } = useAuth();
 
-    setCurrentLevel(level);
+    const stats = useMemo(() => ({
+        solved: activities.filter(a => a.problemSolved).length,
+        topics: new Set(activities.map(a => a.category)).size,
+        streak: calcStreak(activities),
+        hours: Math.round(activities.reduce((s, a) => s + a.duration, 0) / 60),
+    }), [activities]);
 
-    // Find next level
-    const currentIndex = LEVEL_CRITERIA.findIndex(l => l.level === level.level);
-    const next = currentIndex < LEVEL_CRITERIA.length - 1 ? LEVEL_CRITERIA[currentIndex + 1] : null;
-    setNextLevel(next);
+    const currentLevel = useMemo(() => {
+        for (let i = LEVELS.length - 1; i >= 0; i--) {
+            const l = LEVELS[i];
+            if (stats.solved >= l.minProblems && stats.topics >= l.minTopics && stats.streak >= l.minStreak)
+                return LEVELS[i];
+        }
+        return LEVELS[0];
+    }, [stats]);
 
-    // Calculate progress to next level
-    if (next) {
-      const problemProgress = Math.min(totalProblems / next.minProblems, 1);
-      const topicProgress = Math.min(totalTopics / next.minTopics, 1);
-      const streakProgress = Math.min(streak / next.minStreak, 1);
-      const avgProgress = (problemProgress + topicProgress + streakProgress) / 3;
-      setProgress(avgProgress * 100);
-    } else {
-      setProgress(100);
-    }
-  }, [activities]);
+    const levelIdx = LEVELS.indexOf(currentLevel);
+    const nextLevel = LEVELS[levelIdx + 1] ?? null;
 
-  const totalProblems = activities.filter(a => a.problemSolved).length;
-  const totalTopics = new Set(activities.map(a => a.category)).size;
-  const uniqueDates = [...new Set(activities.filter(a => a.date && typeof a.date === 'string').map(a => a.date.split('T')[0]))].sort((a, b) => new Date(b).getTime() - new Date(a).getTime());
-  let currentStreak = 0;
-  const today = new Date().toISOString().split('T')[0];
-  if (uniqueDates.includes(today)) {
-    currentStreak = 1;
-    for (let i = 1; i < uniqueDates.length; i++) {
-      const currentDate = new Date(uniqueDates[i - 1]);
-      const prevDate = new Date(uniqueDates[i]);
-      const diffDays = Math.floor((currentDate.getTime() - prevDate.getTime()) / (1000 * 60 * 60 * 24));
-      if (diffDays === 1) currentStreak++;
-      else break;
-    }
-  }
+    const progressToNext = nextLevel ? Math.round(
+        ((Math.min(stats.solved / Math.max(nextLevel.minProblems, 1), 1) +
+            Math.min(stats.topics / Math.max(nextLevel.minTopics, 1), 1) +
+            Math.min(stats.streak / Math.max(nextLevel.minStreak, 1), 1)) / 3) * 100
+    ) : 100;
 
-  return (
-    <div className="space-y-6">
-      {/* Current Level Card */}
-      <div className={`bg-gradient-to-br ${currentLevel.bgColor} rounded-2xl p-6 border border-gray-200 dark:border-gray-700 transform hover:scale-105 transition-all duration-300`}>
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-3">
-            <div className="text-5xl animate-bounce">{currentLevel.icon}</div>
+    return (
+        <div className="section-gap animate-fadeIn">
             <div>
-              <h3 className={`text-2xl font-bold ${currentLevel.color}`}>{currentLevel.title}</h3>
-              <p className="text-gray-600 dark:text-gray-300 text-sm">{currentLevel.description}</p>
+                <h2 className="page-heading">Profile</h2>
+                <p className="page-subheading">Your progress and skill level</p>
             </div>
-          </div>
-          <div className="text-right">
-            <div className={`text-xl font-bold ${currentLevel.color}`}>Level {LEVEL_CRITERIA.findIndex(l => l.level === currentLevel.level) + 1}</div>
-            <div className="text-gray-500 dark:text-gray-400 text-xs">Current</div>
-          </div>
-        </div>
 
-        <div className="grid grid-cols-3 gap-4 text-center">
-          <div>
-            <div className={`text-xl font-bold ${currentLevel.color}`}>{totalProblems}</div>
-            <div className="text-xs text-gray-600 dark:text-gray-400">Problems Solved</div>
-          </div>
-          <div>
-            <div className={`text-xl font-bold ${currentLevel.color}`}>{totalTopics}</div>
-            <div className="text-xs text-gray-600 dark:text-gray-400">Topics Covered</div>
-          </div>
-          <div>
-            <div className={`text-xl font-bold ${currentLevel.color}`}>{currentStreak}</div>
-            <div className="text-xs text-gray-600 dark:text-gray-400">Day Streak</div>
-          </div>
-        </div>
-      </div>
-
-      {/* Progress to Next Level */}
-      {nextLevel && (
-        <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 border border-gray-200 dark:border-gray-700">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-bold text-gray-800 dark:text-white">Progress to {nextLevel.title}</h3>
-            <span className="text-sm text-gray-500 dark:text-gray-400">{Math.round(progress)}%</span>
-          </div>
-
-          <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-3 mb-4">
-            <div
-              className="bg-gradient-to-r from-blue-500 to-purple-600 h-3 rounded-full transition-all duration-1000 ease-out"
-              style={{ width: `${progress}%` }}
-            ></div>
-          </div>
-
-          <div className="grid grid-cols-3 gap-4 text-sm">
-            <div className="text-center">
-              <div className="font-semibold text-gray-700 dark:text-gray-300">
-                {totalProblems}/{nextLevel.minProblems}
-              </div>
-              <div className="text-gray-500 dark:text-gray-400">Problems</div>
-              <div className={`w-full bg-gray-200 dark:bg-gray-700 rounded-full h-1 mt-1`}>
-                <div
-                  className="bg-green-500 h-1 rounded-full transition-all duration-500"
-                  style={{ width: `${Math.min((totalProblems / nextLevel.minProblems) * 100, 100)}%` }}
-                ></div>
-              </div>
-            </div>
-            <div className="text-center">
-              <div className="font-semibold text-gray-700 dark:text-gray-300">
-                {totalTopics}/{nextLevel.minTopics}
-              </div>
-              <div className="text-gray-500 dark:text-gray-400">Topics</div>
-              <div className={`w-full bg-gray-200 dark:bg-gray-700 rounded-full h-1 mt-1`}>
-                <div
-                  className="bg-blue-500 h-1 rounded-full transition-all duration-500"
-                  style={{ width: `${Math.min((totalTopics / nextLevel.minTopics) * 100, 100)}%` }}
-                ></div>
-              </div>
-            </div>
-            <div className="text-center">
-              <div className="font-semibold text-gray-700 dark:text-gray-300">
-                {currentStreak}/{nextLevel.minStreak}
-              </div>
-              <div className="text-gray-500 dark:text-gray-400">Streak</div>
-              <div className={`w-full bg-gray-200 dark:bg-gray-700 rounded-full h-1 mt-1`}>
-                <div
-                  className="bg-orange-500 h-1 rounded-full transition-all duration-500"
-                  style={{ width: `${Math.min((currentStreak / nextLevel.minStreak) * 100, 100)}%` }}
-                ></div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* All Levels Overview */}
-      <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 border border-gray-200 dark:border-gray-700">
-        <h3 className="text-lg font-bold text-gray-800 dark:text-white mb-4 flex items-center gap-2">
-          <span className="text-2xl">🎯</span>
-          Level System
-        </h3>
-        <div className="space-y-3">
-          {LEVEL_CRITERIA.map((level) => (
-            <div
-              key={level.level}
-              className={`flex items-center gap-4 p-3 rounded-xl transition-all duration-200 ${level.level === currentLevel.level
-                ? `bg-gradient-to-r ${level.bgColor} border-2 border-current`
-                : 'bg-gray-50 dark:bg-gray-700/50'
-                }`}
-            >
-              <div className="text-2xl">{level.icon}</div>
-              <div className="flex-1">
-                <div className={`font-semibold ${level.level === currentLevel.level ? level.color : 'text-gray-700 dark:text-gray-300'}`}>
-                  {level.title}
+            {/* User card */}
+            <div className="card-dark" style={{ padding: '24px', display: 'flex', alignItems: 'center', gap: '20px', flexWrap: 'wrap' }}>
+                <div style={{
+                    width: '64px', height: '64px', borderRadius: '50%',
+                    background: 'linear-gradient(135deg, #D4AF37, #8A6012)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontSize: '1.6rem', fontWeight: 800, color: '#0B0B0B', flexShrink: 0,
+                    boxShadow: '0 0 20px rgba(212,175,55,0.3)',
+                }}>
+                    {user?.name?.charAt(0).toUpperCase() ?? 'U'}
                 </div>
-                <div className="text-xs text-gray-500 dark:text-gray-400">
-                  {level.minProblems}+ problems • {level.minTopics}+ topics • {level.minStreak}+ day streak
+                <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: '1.1rem', fontWeight: 700, color: '#EAEAEA' }}>{user?.name ?? 'User'}</div>
+                    <div className="kpi-sub">{user?.email}</div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '6px' }}>
+                        <span style={{ fontSize: '1.1rem' }}>{currentLevel.icon}</span>
+                        <span style={{ fontSize: '0.8rem', fontWeight: 600, color: currentLevel.color }}>{currentLevel.label}</span>
+                        <span className="kpi-sub">· Level {levelIdx + 1}</span>
+                    </div>
                 </div>
-              </div>
-              {level.level === currentLevel.level && (
-                <div className="text-green-500 text-xl">✓</div>
-              )}
             </div>
-          ))}
+
+            {/* KPI row */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '12px' }}>
+                {[
+                    { label: 'Problems Solved', value: stats.solved, icon: '✓' },
+                    { label: 'Topics Covered', value: stats.topics, icon: '◎' },
+                    { label: 'Day Streak', value: stats.streak, icon: '🔥' },
+                    { label: 'Hours Studied', value: stats.hours, icon: '⏱' },
+                ].map(k => (
+                    <div key={k.label} className="stat-card" style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                        <div style={{ fontSize: '1.2rem' }}>{k.icon}</div>
+                        <div className="kpi-number">{k.value}</div>
+                        <div className="kpi-label">{k.label}</div>
+                    </div>
+                ))}
+            </div>
+
+            {/* Progress to next level */}
+            {nextLevel && (
+                <div className="card-dark" style={{ padding: '20px 24px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                        <div style={{ fontSize: '0.9rem', fontWeight: 600, color: '#EAEAEA' }}>
+                            Progress to {nextLevel.icon} {nextLevel.label}
+                        </div>
+                        <span className="kpi-sub">{progressToNext}%</span>
+                    </div>
+                    <div style={{ height: '6px', background: 'rgba(255,255,255,0.05)', borderRadius: '999px', overflow: 'hidden', marginBottom: '16px' }}>
+                        <div style={{ height: '100%', width: `${progressToNext}%`, background: 'linear-gradient(90deg, #D4AF37, #FFD700)', borderRadius: '999px', transition: 'width 0.8s ease' }} />
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px' }}>
+                        {[
+                            { label: 'Problems', cur: stats.solved, req: nextLevel.minProblems, color: '#22c55e' },
+                            { label: 'Topics', cur: stats.topics, req: nextLevel.minTopics, color: '#3b82f6' },
+                            { label: 'Streak', cur: stats.streak, req: nextLevel.minStreak, color: '#f59e0b' },
+                        ].map(r => (
+                            <div key={r.label} style={{ textAlign: 'center' }}>
+                                <div style={{ fontSize: '0.875rem', fontWeight: 700, color: '#EAEAEA' }}>{r.cur}/{r.req}</div>
+                                <div className="kpi-sub">{r.label}</div>
+                                <div style={{ height: '3px', background: 'rgba(255,255,255,0.05)', borderRadius: '999px', overflow: 'hidden', marginTop: '6px' }}>
+                                    <div style={{ height: '100%', width: `${Math.min(r.cur / Math.max(r.req, 1) * 100, 100)}%`, background: r.color, borderRadius: '999px', transition: 'width 0.6s ease' }} />
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
+
+            {/* Level system */}
+            <div className="card-dark" style={{ padding: '20px 24px' }}>
+                <div className="card-title" style={{ marginBottom: '16px' }}>Level System</div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                    {LEVELS.map((l, i) => {
+                        const isCurrent = l.key === currentLevel.key;
+                        return (
+                            <div key={l.key} style={{
+                                display: 'flex', alignItems: 'center', gap: '14px',
+                                padding: '12px 16px', borderRadius: '12px',
+                                background: isCurrent ? 'rgba(212,175,55,0.07)' : 'rgba(255,255,255,0.02)',
+                                border: `1px solid ${isCurrent ? l.color + '50' : 'rgba(255,255,255,0.04)'}`,
+                            }}>
+                                <span style={{ fontSize: '1.4rem' }}>{l.icon}</span>
+                                <div style={{ flex: 1 }}>
+                                    <div style={{ fontSize: '0.875rem', fontWeight: 600, color: isCurrent ? l.color : '#666' }}>{l.label}</div>
+                                    <div className="kpi-sub">{l.minProblems}+ problems · {l.minTopics}+ topics · {l.minStreak}+ day streak</div>
+                                </div>
+                                {isCurrent
+                                    ? <span style={{ color: '#22c55e', fontSize: '0.8rem', fontWeight: 700 }}>✓ Current</span>
+                                    : i > levelIdx && <span className="kpi-sub">Locked</span>
+                                }
+                            </div>
+                        );
+                    })}
+                </div>
+            </div>
         </div>
-      </div>
-    </div>
-  );
+    );
 };
 
 export default UserProfile;

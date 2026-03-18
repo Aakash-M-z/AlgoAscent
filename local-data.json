@@ -1,0 +1,23 @@
+{
+  "users": [
+    {
+      "username": "aakashleo420",
+      "email": "aakashleo420@gmail.com",
+      "password": "5c56bj95d9",
+      "role": "admin",
+      "id": "1",
+      "createdAt": "2026-02-09T05:53:44.531Z"
+    },
+    {
+      "username": "kit27.cse01",
+      "email": "kit27.cse01@gmail.com",
+      "password": "we6mkrbjtm",
+      "role": "user",
+      "id": "2",
+      "createdAt": "2026-02-09T05:54:51.082Z"
+    }
+  ],
+  "activities": [ ],
+  "adminLogs": [ ],
+  "tasks": [ ]
+}
