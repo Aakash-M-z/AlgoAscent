@@ -210,6 +210,62 @@ export class DatabaseAPI {
       return res.ok;
     } catch { return false; }
   }
+
+  async getRecommendations(activities: import('../../shared/schema').Activity[]): Promise<{
+    recommendedDifficulty: 'Easy' | 'Medium' | 'Hard';
+    difficultyReason: string;
+    topicPriority: { topic: string; reason: string; urgency: 'high' | 'medium' | 'low' }[];
+    problems: Array<{
+      id: string; number: number; name: string;
+      difficulty: 'Easy' | 'Medium' | 'Hard';
+      topic: string; platform: string;
+      tags: string[]; reason: string; score: number; isNew: boolean;
+    }>;
+  } | null> {
+    try {
+      const payload = activities.map(a => ({
+        topic: a.topic || a.category,
+        difficulty: a.difficulty || 'Medium',
+        solved: a.solved,
+        date: typeof a.date === 'string' ? a.date : new Date(a.date).toISOString(),
+      }));
+      const res = await fetch(`${API_BASE}/recommendations`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ activities: payload }),
+      });
+      if (!res.ok) return null;
+      return res.json();
+    } catch (error) {
+      console.error('getRecommendations:', error);
+      return null;
+    }
+  }
+
+  async analyzeProgress(activities: import('../../shared/schema').Activity[], username?: string): Promise<{
+    strengths: string[];
+    weaknesses: string[];
+    suggestions: { topic: string; reason: string; priority: 'High' | 'Medium' | 'Low' }[];
+    nextProblems: { name: string; difficulty: 'Easy' | 'Medium' | 'Hard'; topic: string; reason: string }[];
+    overallAssessment: string;
+    nextMilestone: string;
+  } | null> {
+    try {
+      const res = await fetch(`${API_BASE}/ai/analyze`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ activities, username }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || `HTTP ${res.status}`);
+      }
+      return res.json();
+    } catch (error) {
+      console.error('analyzeProgress:', error);
+      return null;
+    }
+  }
 }
 
 export const databaseAPI = new DatabaseAPI();
