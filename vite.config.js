@@ -12,6 +12,15 @@ export default defineConfig({
         target: 'http://127.0.0.1:3001',
         changeOrigin: true,
         secure: false,
+        configure: (proxy) => {
+          proxy.on('error', (err, _req, res) => {
+            console.warn('[proxy] backend not reachable:', err.message);
+            if (!res.headersSent) {
+              res.writeHead(503, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({ error: 'Backend not running. Start it with: npm run server' }));
+            }
+          });
+        },
       }
     }
   },

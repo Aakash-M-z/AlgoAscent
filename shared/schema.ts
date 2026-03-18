@@ -27,3 +27,31 @@ export interface Activity {
 }
 
 export type InsertActivity = Omit<Activity, 'id' | 'createdAt'>;
+
+export interface Task {
+  id: string;
+  userId: string;
+  title: string;
+  category: 'Work' | 'Study' | 'Fitness' | 'Personal' | 'Other';
+  priority: 'High' | 'Medium' | 'Low';
+  deadline: string;
+  completed: boolean;
+  completedAt?: string;
+  notes?: string;
+  createdAt: string;
+}
+
+export type InsertTask = Omit<Task, 'id' | 'createdAt'>;
+
+export interface AdminLog {
+  id: string;
+  adminId: string;
+  adminEmail: string;
+  action: string;       // e.g. 'DELETE_USER', 'CHANGE_ROLE', 'LOGIN'
+  targetId?: string;    // user/activity id affected
+  targetEmail?: string;
+  detail: string;       // human-readable description
+  createdAt: Date;
+}
+
+export type InsertAdminLog = Omit<AdminLog, 'id' | 'createdAt'>;

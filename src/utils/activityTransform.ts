@@ -22,7 +22,7 @@ export function dbToFrontendActivity(dbActivity: DBActivity): FrontendActivity {
 
 // Transform frontend activity to database activity format
 export function frontendToDbActivity(
-  frontendActivity: Omit<FrontendActivity, 'id'>,
+  frontendActivity: FrontendActivity | Omit<FrontendActivity, 'id'>,
   userId: number | string
 ): Omit<DBActivity, 'id' | 'createdAt'> {
   return {

@@ -9,6 +9,10 @@ import { Activity } from './types';
 import { databaseAPI } from './api/database';
 import { SessionManager } from './utils/sessionManager';
 import { dbToFrontendActivity, frontendToDbActivity } from './utils/activityTransform';
+import ToastProvider, { useToast } from './components/Toast';
+import Onboarding, { shouldShowOnboarding } from './components/Onboarding';
+import MobileNav from './components/MobileNav';
+import { SkeletonStatRow, SkeletonCard, SkeletonChart, SkeletonTaskList } from './components/SkeletonLoader';
 
 import SimpleHeatmap from './components/SimpleHeatmap';
 import ProgressStats from './components/ProgressStats';
@@ -24,376 +28,394 @@ import SolutionResources from './components/SolutionResources';
 import QuickAddProblem from './components/QuickAddProblem';
 import DailyMotivation from './components/DailyMotivation';
 import UserProfile from './components/UserProfile';
-import AIAnalysis from './components/AIAnalysis';
 import AIAssistant from './components/AIAssistant';
 import TaskManager from './components/TaskManager';
 import AnalyticsDashboard from './components/AnalyticsDashboard';
 import ErrorBoundary from './components/ErrorBoundary';
+import IntroScreen from './components/IntroScreen';
 
-/* ── Nav items ─────────────────────────────────────────────────── */
 const NAV_ITEMS = [
-  { id: 'overview', label: 'Overview', icon: '⊞', section: 'main' },
-  { id: 'tasks', label: 'Tasks', icon: '✓', section: 'main' },
-  { id: 'analytics', label: 'Analytics', icon: '◐', section: 'main' },
-  { id: 'ai', label: 'AI Assistant', icon: '◈', section: 'main' },
-  { id: 'roadmap', label: 'DSA Roadmap', icon: '◎', section: 'tools' },
-  { id: 'stats', label: 'Statistics', icon: '▦', section: 'tools' },
-  { id: 'badges', label: 'Badges', icon: '◆', section: 'tools' },
-  { id: 'resources', label: 'Resources', icon: '◇', section: 'tools' },
-  { id: 'profile', label: 'Profile', icon: '◉', section: 'account' },
-];
+    { id: 'overview', label: 'Overview', icon: '⊞', section: 'main' },
+    { id: 'tasks', label: 'Tasks', icon: '✓', section: 'main' },
+    { id: 'analytics', label: 'Analytics', icon: '◐', section: 'main' },
+    { id: 'ai', label: 'AI Assistant', icon: '◈', section: 'main' },
+    { id: 'roadmap', label: 'DSA Roadmap', icon: '◎', section: 'tools' },
+    { id: 'stats', label: 'Statistics', icon: '▦', section: 'tools' },
+    { id: 'badges', label: 'Badges', icon: '◆', section: 'tools' },
+    { id: 'resources', label: 'Resources', icon: '◇', section: 'tools' },
+    { id: 'profile', label: 'Profile', icon: '◉', section: 'account' },
+] as const;
 
-/* ── Sidebar ───────────────────────────────────────────────────── */
-interface SidebarProps {
-  tabs: typeof NAV_ITEMS;
-  activeTab: string;
-  onTabChange: (id: string) => void;
-  collapsed: boolean;
-  onToggle: () => void;
-}
+type TabId = typeof NAV_ITEMS[number]['id'] | 'admin';
 
-const Sidebar: React.FC<SidebarProps> = ({ tabs, activeTab, onTabChange, collapsed, onToggle }) => {
-  const sections = [
-    { key: 'main', label: 'Main' },
-    { key: 'tools', label: 'Tools' },
-    { key: 'account', label: 'Account' },
-  ];
-
-  return (
-    <aside className="sidebar hidden md:flex flex-col sticky top-16 h-[calc(100vh-64px)]"
-      style={{ width: collapsed ? '60px' : '216px', flexShrink: 0, transition: 'width 0.25s ease', overflow: 'hidden' }}>
-      {/* Toggle */}
-      <div style={{ padding: '12px', display: 'flex', justifyContent: collapsed ? 'center' : 'flex-end' }}>
-        <button onClick={onToggle}
-          style={{ width: '28px', height: '28px', borderRadius: '7px', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)', color: '#555', cursor: 'pointer', fontSize: '0.7rem', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.2s ease' }}
-          onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = '#D4AF37'; (e.currentTarget as HTMLElement).style.borderColor = 'rgba(212,175,55,0.3)'; }}
-          onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = '#555'; (e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,255,255,0.07)'; }}
-        >{collapsed ? '▶' : '◀'}</button>
-      </div>
-
-      <nav style={{ flex: 1, padding: '0 8px', overflowY: 'auto', overflowX: 'hidden' }}>
-        {sections.map(sec => {
-          const items = tabs.filter(t => t.section === sec.key);
-          if (items.length === 0) return null;
-          return (
-            <div key={sec.key} style={{ marginBottom: '8px' }}>
-              {!collapsed && (
-                <div style={{ fontSize: '0.6rem', color: '#333', textTransform: 'uppercase', letterSpacing: '0.15em', padding: '8px 10px 4px', fontWeight: 600 }}>
-                  {sec.label}
-                </div>
-              )}
-              {items.map(tab => (
-                <button key={tab.id} onClick={() => onTabChange(tab.id)} title={collapsed ? tab.label : undefined}
-                  className={`sidebar-item w-full ${activeTab === tab.id ? 'active' : ''}`}
-                  style={{ justifyContent: collapsed ? 'center' : 'flex-start', padding: collapsed ? '10px' : '10px 12px' }}
-                >
-                  <span style={{ fontSize: '1rem', flexShrink: 0, lineHeight: 1 }}>{tab.icon}</span>
-                  {!collapsed && <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{tab.label}</span>}
-                </button>
-              ))}
-              {!collapsed && <div style={{ height: '1px', background: 'rgba(255,255,255,0.04)', margin: '8px 4px' }} />}
+/* ── Sidebar ─────────────────────────────────────────────────── */
+const Sidebar: React.FC<{
+    tabs: { id: string; label: string; icon: string; section: string }[];
+    activeTab: string;
+    onTabChange: (id: string) => void;
+    collapsed: boolean;
+    onToggle: () => void;
+}> = ({ tabs, activeTab, onTabChange, collapsed, onToggle }) => {
+    const sections = [
+        { key: 'main', label: 'Main' },
+        { key: 'tools', label: 'Tools' },
+        { key: 'account', label: 'Account' },
+    ];
+    return (
+        <aside
+            className="sidebar hidden md:flex flex-col"
+            style={{
+                width: collapsed ? '60px' : '216px',
+                flexShrink: 0,
+                transition: 'width 0.25s cubic-bezier(0.4,0,0.2,1)',
+                overflow: 'hidden',
+                height: '100%',
+                alignSelf: 'stretch',
+            }}
+        >
+            <div style={{ padding: '12px', display: 'flex', justifyContent: collapsed ? 'center' : 'flex-end' }}>
+                <button onClick={onToggle}
+                    style={{ width: '28px', height: '28px', borderRadius: '7px', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)', color: '#555', cursor: 'pointer', fontSize: '0.7rem', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.2s ease' }}
+                    onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = '#D4AF37'; (e.currentTarget as HTMLElement).style.borderColor = 'rgba(212,175,55,0.3)'; }}
+                    onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = '#555'; (e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,255,255,0.07)'; }}
+                >{collapsed ? '▶' : '◀'}</button>
             </div>
-          );
-        })}
-      </nav>
-
-      {!collapsed && (
-        <div style={{ padding: '12px 16px', borderTop: '1px solid rgba(212,175,55,0.1)' }}>
-          <div style={{ fontSize: '0.65rem', color: '#333', textTransform: 'uppercase', letterSpacing: '0.12em' }}>Progress Tracker</div>
-        </div>
-      )}
-    </aside>
-  );
+            <nav style={{ flex: 1, padding: '0 8px', overflowY: 'auto', overflowX: 'hidden' }}>
+                {sections.map(sec => {
+                    const items = tabs.filter(t => t.section === sec.key);
+                    if (!items.length) return null;
+                    return (
+                        <div key={sec.key} style={{ marginBottom: '4px' }}>
+                            {!collapsed && (
+                                <div className="section-label" style={{ padding: '10px 10px 4px' }}>
+                                    {sec.label}
+                                </div>
+                            )}
+                            {items.map(tab => (
+                                <button key={tab.id} onClick={() => onTabChange(tab.id)} title={collapsed ? tab.label : undefined}
+                                    className={`sidebar-item w-full ${activeTab === tab.id ? 'active' : ''}`}
+                                    style={{ justifyContent: collapsed ? 'center' : 'flex-start', padding: collapsed ? '10px' : '9px 12px' }}
+                                >
+                                    <span style={{ fontSize: '0.95rem', flexShrink: 0, lineHeight: 1 }}>{tab.icon}</span>
+                                    {!collapsed && <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontSize: '0.85rem' }}>{tab.label}</span>}
+                                </button>
+                            ))}
+                            {!collapsed && <div style={{ height: '1px', background: 'rgba(255,255,255,0.03)', margin: '6px 4px' }} />}
+                        </div>
+                    );
+                })}
+            </nav>
+            {!collapsed && (
+                <div style={{ padding: '12px 16px', borderTop: '1px solid rgba(212,175,55,0.08)' }}>
+                    <div className="section-label">Progress Tracker v2</div>
+                </div>
+            )}
+        </aside>
+    );
 };
 
-/* ── AppContent ────────────────────────────────────────────────── */
+/* ── Overview Tab ─────────────────────────────────────────────── */
+const OverviewTab: React.FC<{
+    activities: Activity[];
+    loading: boolean;
+    onAddActivity: (a: Activity) => void;
+    onDeleteActivity: (id: string) => void;
+}> = ({ activities, loading, onAddActivity, onDeleteActivity }) => {
+    const stats = useMemo(() => {
+        const total = activities.length;
+        const solved = activities.filter(a => a.problemSolved).length;
+        const totalMins = activities.reduce((s, a) => s + a.duration, 0);
+        const streak = (() => {
+            const days = new Set(activities.map(a => a.date.slice(0, 10)));
+            let count = 0;
+            const d = new Date();
+            while (days.has(d.toISOString().slice(0, 10))) {
+                count++;
+                d.setDate(d.getDate() - 1);
+            }
+            return count;
+        })();
+        return { total, solved, totalMins, streak };
+    }, [activities]);
+
+    const kpis = [
+        { label: 'Total Sessions', value: stats.total, icon: '▦', sub: 'all time' },
+        { label: 'Problems Solved', value: stats.solved, icon: '✓', sub: 'logged' },
+        { label: 'Hours Studied', value: Math.round(stats.totalMins / 60), icon: '◐', sub: 'total' },
+        { label: 'Day Streak', value: stats.streak, icon: '🔥', sub: 'current' },
+    ];
+
+    return (
+        <div className="section-gap">
+            {/* KPI row */}
+            {loading ? <SkeletonStatRow /> : (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '12px' }}>
+                    {kpis.map(k => (
+                        <div key={k.label} className="stat-card" style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                            <div style={{ fontSize: '1.4rem', lineHeight: 1 }}>{k.icon}</div>
+                            <div className="kpi-number">{k.value}</div>
+                            <div className="kpi-label">{k.label}</div>
+                            <div className="kpi-sub">{k.sub}</div>
+                        </div>
+                    ))}
+                </div>
+            )}
+
+            {/* Daily motivation + streak */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: '12px', alignItems: 'start' }}>
+                <DailyMotivation />
+                <StreakTracker activities={activities} />
+            </div>
+
+            {/* Heatmap */}
+            {loading ? <SkeletonChart /> : (
+                <div className="card-dark" style={{ padding: '20px 24px' }}>
+                    <div className="card-title" style={{ marginBottom: '16px' }}>Activity Heatmap</div>
+                    <SimpleHeatmap activities={activities} />
+                </div>
+            )}
+
+            {/* Quick add problem */}
+            <QuickAddProblem onAdd={onAddActivity} />
+
+            {/* Recent activity */}
+            {loading ? <SkeletonTaskList /> : (
+                <div className="card-dark" style={{ padding: '20px 24px' }}>
+                    <div className="card-title" style={{ marginBottom: '16px' }}>Recent Activity</div>
+                    {activities.length === 0 ? (
+                        <div style={{ textAlign: 'center', padding: '40px 20px' }}>
+                            <div style={{ fontSize: '2rem', marginBottom: '12px', opacity: 0.2 }}>◈</div>
+                            <div style={{ color: '#555', fontSize: '0.9rem' }}>No sessions yet. Add your first activity above.</div>
+                        </div>
+                    ) : (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                            {activities.slice(0, 8).map(a => (
+                                <div key={a.id} style={{
+                                    display: 'flex', alignItems: 'center', gap: '12px',
+                                    padding: '10px 14px', borderRadius: '10px',
+                                    background: 'rgba(255,255,255,0.02)',
+                                    border: '1px solid rgba(255,255,255,0.04)',
+                                    transition: 'background 0.2s',
+                                }}
+                                    onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = 'rgba(212,175,55,0.04)'}
+                                    onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.02)'}
+                                >
+                                    <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: a.problemSolved ? '#22c55e' : '#D4AF37', flexShrink: 0 }} />
+                                    <div style={{ flex: 1, minWidth: 0 }}>
+                                        <div style={{ fontSize: '0.875rem', color: '#EAEAEA', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                            {a.description || a.category}
+                                        </div>
+                                        <div className="kpi-sub" style={{ marginTop: '2px' }}>
+                                            {a.date.slice(0, 10)} · {a.duration}m · {a.category}
+                                        </div>
+                                    </div>
+                                    {a.difficulty && (
+                                        <span style={{
+                                            fontSize: '0.7rem', padding: '2px 8px', borderRadius: '999px', fontWeight: 600,
+                                            background: a.difficulty === 'Easy' ? 'rgba(34,197,94,0.1)' : a.difficulty === 'Medium' ? 'rgba(245,158,11,0.1)' : 'rgba(239,68,68,0.1)',
+                                            color: a.difficulty === 'Easy' ? '#22c55e' : a.difficulty === 'Medium' ? '#f59e0b' : '#ef4444',
+                                        }}>{a.difficulty}</span>
+                                    )}
+                                    <button onClick={() => onDeleteActivity(a.id)}
+                                        style={{ background: 'none', border: 'none', color: '#333', cursor: 'pointer', fontSize: '0.8rem', padding: '4px 6px', borderRadius: '4px', transition: 'color 0.2s' }}
+                                        onMouseEnter={e => (e.currentTarget as HTMLElement).style.color = '#ef4444'}
+                                        onMouseLeave={e => (e.currentTarget as HTMLElement).style.color = '#333'}
+                                    >✕</button>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {/* Activity form */}
+            <ActivityForm onAddActivity={(partial) => {
+                const activity: Activity = {
+                    ...partial,
+                    id: Date.now().toString(),
+                    date: new Date().toISOString().split('T')[0],
+                };
+                onAddActivity(activity);
+            }} />
+
+            {/* Notifications */}
+            <DailyProblemNotification />
+        </div>
+    );
+};
+
+/* ── AppContent ───────────────────────────────────────────────── */
 const AppContent: React.FC = () => {
-  const { isAuthenticated, user, isLoading } = useAuth();
-  const [activities, setActivities] = useState<Activity[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState('overview');
-  const [showDailyProblem, setShowDailyProblem] = useState(false);
-  const [showLogin, setShowLogin] = useState(false);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+    const { user, isAuthenticated, isLoading: authLoading } = useAuth();
+    const { toast } = useToast();
 
-  const tabs = useMemo(() => [
-    ...NAV_ITEMS,
-    ...(user?.role === 'admin' ? [{ id: 'admin', label: 'Admin', icon: '⚙', section: 'account' as const }] : []),
-  ], [user?.role]);
+    const [activeTab, setActiveTab] = useState<string>('overview');
+    const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+    const [activities, setActivities] = useState<Activity[]>([]);
+    const [dataLoading, setDataLoading] = useState(false);
+    const [showOnboarding, setShowOnboarding] = useState(false);
+    const [showHomePage, setShowHomePage] = useState(false);
+    const [showIntro, setShowIntro] = useState(() => !localStorage.getItem('intro_seen'));
 
-  useEffect(() => {
-    if (isAuthenticated && user) loadActivities();
-    else { setActivities([]); setLoading(false); }
-  }, [isAuthenticated, user]);
+    // Check onboarding on first auth
+    useEffect(() => {
+        if (isAuthenticated && shouldShowOnboarding()) {
+            setShowOnboarding(true);
+        }
+    }, [isAuthenticated]);
 
-  useEffect(() => { if (isAuthenticated) setShowLogin(false); }, [isAuthenticated]);
+    // Load activities when authenticated
+    useEffect(() => {
+        if (!isAuthenticated || !user) return;
+        setDataLoading(true);
+        databaseAPI.getUserActivities(user.id)
+            .then(raw => setActivities(raw.map(dbToFrontendActivity)))
+            .catch(() => toast('Failed to load activities', 'error'))
+            .finally(() => setDataLoading(false));
+    }, [isAuthenticated, user]);
 
-  useEffect(() => {
-    if (!isAuthenticated) return;
-    const iv = setInterval(() => SessionManager.refreshSession(), 30 * 60 * 1000);
-    return () => clearInterval(iv);
-  }, [isAuthenticated]);
+    const handleAddActivity = useCallback(async (activity: Activity) => {
+        try {
+            const saved = await databaseAPI.createActivity(frontendToDbActivity(activity, user!.id));
+            if (saved) {
+                setActivities(prev => [dbToFrontendActivity(saved), ...prev]);
+                toast('Activity added', 'success');
+            } else {
+                toast('Failed to save activity', 'error');
+            }
+        } catch {
+            toast('Failed to save activity', 'error');
+        }
+    }, [toast, user]);
 
-  const loadActivities = useCallback(async () => {
-    if (!user) return;
-    try {
-      setLoading(true);
-      const db = await databaseAPI.getUserActivities(user.id);
-      setActivities(db.map(dbToFrontendActivity));
-    } catch {
-      const saved = localStorage.getItem(`activities_${user.id}`);
-      if (saved) { try { setActivities(JSON.parse(saved)); } catch { setActivities([]); } }
-    } finally { setLoading(false); }
-  }, [user]);
+    const handleDeleteActivity = useCallback(async (id: string) => {
+        const prev = activities.find(a => a.id === id);
+        setActivities(a => a.filter(x => x.id !== id));
+        try {
+            await databaseAPI.deleteActivity(id);
+            toast('Activity removed', 'info');
+        } catch {
+            if (prev) setActivities(a => [prev, ...a]);
+            toast('Failed to delete activity', 'error');
+        }
+    }, [activities, toast]);
 
-  const addActivity = async (activity: Omit<Activity, 'id' | 'date'>) => {
-    if (!user) return;
-    const full: Activity = { ...activity, id: Date.now().toString(), date: new Date().toISOString() };
-    try {
-      const created = await databaseAPI.createActivity(frontendToDbActivity(full, user.id));
-      if (created) setActivities(p => [...p, dbToFrontendActivity(created)]);
-      else { setActivities(p => [...p, full]); localStorage.setItem(`activities_${user.id}`, JSON.stringify([...activities, full])); }
-    } catch {
-      setActivities(p => [...p, full]);
-      localStorage.setItem(`activities_${user.id}`, JSON.stringify([...activities, full]));
+    const navItems = useMemo(() => {
+        const items = [...NAV_ITEMS] as { id: string; label: string; icon: string; section: string }[];
+        if (user?.role === 'admin') items.push({ id: 'admin', label: 'Admin', icon: '⚙', section: 'account' });
+        return items;
+    }, [user]);
+
+    if (authLoading) {
+        return (
+            <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#0B0B0B' }}>
+                <div className="spinner-gold" />
+            </div>
+        );
     }
-  };
 
-  const quickStats = useMemo(() => {
-    const dates = [...new Set(activities.map(a => a.date.split('T')[0]))].sort((a, b) => new Date(b).getTime() - new Date(a).getTime());
-    let streak = 0;
-    const today = new Date().toISOString().split('T')[0];
-    if (dates.includes(today)) {
-      streak = 1;
-      for (let i = 1; i < dates.length; i++) {
-        if (Math.floor((new Date(dates[i - 1]).getTime() - new Date(dates[i]).getTime()) / 86400000) === 1) streak++;
-        else break;
-      }
+    if (!isAuthenticated) {
+        if (showHomePage) return <HomePage onGetStarted={() => setShowHomePage(false)} />;
+        return (
+            <>
+                {showIntro && (
+                    <IntroScreen onDone={() => {
+                        localStorage.setItem('intro_seen', '1');
+                        setShowIntro(false);
+                    }} />
+                )}
+                {/* Login fades in underneath as intro fades out */}
+                <div style={{
+                    opacity: showIntro ? 0 : 1,
+                    transition: 'opacity 0.5s ease',
+                    pointerEvents: showIntro ? 'none' : 'all',
+                }}>
+                    <Login />
+                </div>
+            </>
+        );
     }
-    return {
-      totalActivities: activities.length,
-      problemsSolved: activities.filter(a => a.problemSolved).length,
-      totalTime: Math.round(activities.reduce((s, a) => s + a.duration, 0) / 60),
-      topicsCovered: new Set(activities.map(a => a.category)).size,
-      currentStreak: streak,
+
+    const renderTab = () => {
+        const content = (() => {
+            switch (activeTab) {
+                case 'overview':
+                    return <OverviewTab activities={activities} loading={dataLoading} onAddActivity={handleAddActivity} onDeleteActivity={handleDeleteActivity} />;
+                case 'tasks':
+                    return <TaskManager />;
+                case 'analytics':
+                    return <AnalyticsDashboard activities={activities} />;
+                case 'ai':
+                    return <AIAssistant activities={activities} />;
+                case 'roadmap':
+                    return <DSARoadmap activities={activities} onAddActivity={handleAddActivity} />;
+                case 'stats':
+                    return <ProgressStats activities={activities} />;
+                case 'badges':
+                    return <BadgeSystem activities={activities} />;
+                case 'resources':
+                    return <SolutionResources />;
+                case 'profile':
+                    return <UserProfile activities={activities} />;
+                case 'admin':
+                    return <RoleBasedRoute requiredRole="admin"><AdminPanel /></RoleBasedRoute>;
+                default:
+                    return null;
+            }
+        })();
+        return <div key={activeTab} className="page-enter">{content}</div>;
     };
-  }, [activities]);
 
-  const handleTabChange = useCallback((id: string) => setActiveTab(id), []);
-
-  const Spinner = () => (
-    <div className="min-h-screen flex items-center justify-center" style={{ background: '#0B0B0B' }}>
-      <div className="text-center animate-fadeIn">
-        <div className="spinner-gold mx-auto mb-4" />
-        <p style={{ color: '#555', fontSize: '0.85rem', fontFamily: 'Inter, sans-serif' }}>Loading...</p>
-      </div>
-    </div>
-  );
-
-  if (isLoading) return <Spinner />;
-  if (!isAuthenticated) return showLogin
-    ? <Login onLogin={() => { }} onBack={() => setShowLogin(false)} />
-    : <HomePage onGetStarted={() => setShowLogin(true)} />;
-  if (loading) return <Spinner />;
-
-  return (
-    <div style={{ minHeight: '100vh', background: 'linear-gradient(160deg, #0B0B0B 0%, #111111 50%, #0E0E0E 100%)', color: '#EAEAEA', fontFamily: 'Inter, Poppins, sans-serif' }} className="animate-fadeIn">
-      <Header />
-      <DailyProblemNotification />
-      {showDailyProblem && <DailyProblemNotification forceShow onClose={() => setShowDailyProblem(false)} />}
-      <NotificationSettings onTriggerDailyProblem={() => setShowDailyProblem(true)} />
-
-      <div style={{ display: 'flex', minHeight: 'calc(100vh - 64px)' }}>
-        <Sidebar tabs={tabs} activeTab={activeTab} onTabChange={handleTabChange} collapsed={sidebarCollapsed} onToggle={() => setSidebarCollapsed(c => !c)} />
-
-        <main style={{ flex: 1, overflow: 'auto', padding: '24px', minWidth: 0 }}>
-          {/* Mobile tab nav */}
-          <div className="md:hidden tab-nav mb-5">
-            {tabs.map(t => (
-              <button key={t.id} onClick={() => handleTabChange(t.id)} className={`tab-item ${activeTab === t.id ? 'active' : ''}`}>
-                <span>{t.icon}</span><span>{t.label}</span>
-              </button>
-            ))}
-          </div>
-
-          <ErrorBoundary key={activeTab}>
-            {activeTab === 'overview' && <OverviewTab activities={activities} quickStats={quickStats} addActivity={addActivity} user={user} />}
-            {activeTab === 'tasks' && <div className="card-dark p-6"><TaskManager /></div>}
-            {activeTab === 'analytics' && <AnalyticsDashboard activities={activities} />}
-            {activeTab === 'ai' && <div className="card-dark p-6"><AIAssistant activities={activities} username={user?.name} /></div>}
-            {activeTab === 'roadmap' && (
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: '20px' }}>
-                <div className="card-dark p-6"><DSARoadmap activities={activities} onAddActivity={addActivity} /></div>
-                <div className="card-dark p-6" style={{ width: '280px' }}>
-                  <h3 style={{ color: '#D4AF37', fontSize: '0.9rem', fontWeight: 600, marginBottom: '16px' }}>Log Activity</h3>
-                  <RoleBasedRoute allowedRoles={['admin', 'user']}><ActivityForm onAddActivity={addActivity} /></RoleBasedRoute>
+    return (
+        <>
+            {/* ── Desktop layout: locked to 100vh, only content column scrolls ── */}
+            <div className="hidden md:flex" style={{ height: '100vh', background: '#0B0B0B', flexDirection: 'column', overflow: 'hidden' }}>
+                {showOnboarding && <Onboarding onComplete={() => setShowOnboarding(false)} />}
+                <Header onNavigate={setActiveTab} />
+                <div style={{ display: 'flex', flex: 1, minHeight: 0, overflow: 'hidden' }}>
+                    <Sidebar
+                        tabs={navItems}
+                        activeTab={activeTab}
+                        onTabChange={setActiveTab}
+                        collapsed={sidebarCollapsed}
+                        onToggle={() => setSidebarCollapsed(c => !c)}
+                    />
+                    <div style={{ flex: 1, minWidth: 0, overflowY: 'auto', overflowX: 'hidden' }}>
+                        <main style={{ maxWidth: '1100px', margin: '0 auto', padding: '28px 24px 48px', width: '100%', boxSizing: 'border-box' }}>
+                            <ErrorBoundary>{renderTab()}</ErrorBoundary>
+                        </main>
+                    </div>
                 </div>
-              </div>
-            )}
-            {activeTab === 'stats' && (
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: '20px' }}>
-                <div className="card-dark p-6">
-                  <h2 style={{ fontSize: '1.2rem', fontWeight: 700, color: '#EAEAEA', marginBottom: '20px' }}>Detailed Statistics</h2>
-                  <RoleBasedRoute allowedRoles={['admin', 'user']}><ProgressStats activities={activities} /></RoleBasedRoute>
-                </div>
-                <div className="card-dark p-6" style={{ width: '280px' }}>
-                  <h3 style={{ color: '#D4AF37', fontSize: '0.9rem', fontWeight: 600, marginBottom: '16px' }}>Log Activity</h3>
-                  <RoleBasedRoute allowedRoles={['admin', 'user']}><ActivityForm onAddActivity={addActivity} /></RoleBasedRoute>
-                </div>
-              </div>
-            )}
-            {activeTab === 'badges' && <div className="animate-fadeIn"><BadgeSystem activities={activities} /></div>}
-            {activeTab === 'resources' && <div className="animate-fadeIn"><SolutionResources /></div>}
-            {activeTab === 'profile' && <div className="animate-fadeIn"><UserProfile activities={activities} /></div>}
-            {activeTab === 'admin' && user?.role === 'admin' && <div className="card-dark p-6 animate-fadeIn"><AdminPanel /></div>}
-          </ErrorBoundary>
-        </main>
-      </div>
-    </div>
-  );
+            </div>
+
+            {/* ── Mobile layout: normal page scroll, bottom nav fixed ── */}
+            <div className="flex flex-col md:hidden" style={{ minHeight: '100vh', background: '#0B0B0B' }}>
+                {showOnboarding && <Onboarding onComplete={() => setShowOnboarding(false)} />}
+                <Header onNavigate={setActiveTab} />
+                <main style={{ flex: 1, padding: '20px 16px 80px', boxSizing: 'border-box' }}>
+                    <ErrorBoundary>{renderTab()}</ErrorBoundary>
+                </main>
+                <MobileNav items={navItems} activeTab={activeTab} onTabChange={setActiveTab} />
+            </div>
+
+            <div style={{ display: 'none' }}><NotificationSettings /></div>
+        </>
+    );
 };
 
-/* ── Overview Tab ──────────────────────────────────────────────── */
-interface OverviewProps {
-  activities: Activity[];
-  quickStats: { totalActivities: number; problemsSolved: number; totalTime: number; topicsCovered: number; currentStreak: number };
-  addActivity: (a: Omit<Activity, 'id' | 'date'>) => void;
-  user: any;
-}
+/* ── Root App ─────────────────────────────────────────────────── */
+const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || '';
 
-const OverviewTab: React.FC<OverviewProps> = ({ activities, quickStats, addActivity, user }) => {
-  const productivityScore = useMemo(() => {
-    const total = activities.length;
-    if (total === 0) return 0;
-    const solveRate = activities.filter(a => a.problemSolved).length / total;
-    const streakBonus = Math.min(quickStats.currentStreak, 14) / 14;
-    const last7 = activities.filter(a => {
-      const diff = (Date.now() - new Date(a.date).getTime()) / 86400000;
-      return diff <= 7;
-    }).length;
-    return Math.min(100, Math.round(solveRate * 40 + streakBonus * 30 + Math.min(last7, 7) / 7 * 30));
-  }, [activities, quickStats.currentStreak]);
-
-  const circumference = 2 * Math.PI * 36;
-
-  const statCards = [
-    { label: 'Problems Solved', value: quickStats.problemsSolved, icon: '✓', color: '#22c55e', bg: 'rgba(34,197,94,0.08)' },
-    { label: 'Day Streak', value: quickStats.currentStreak, icon: '◈', color: '#D4AF37', bg: 'rgba(212,175,55,0.08)' },
-    { label: 'Hours Invested', value: `${quickStats.totalTime}h`, icon: '◷', color: '#a78bfa', bg: 'rgba(167,139,250,0.08)' },
-    { label: 'Topics Covered', value: quickStats.topicsCovered, icon: '◎', color: '#38bdf8', bg: 'rgba(56,189,248,0.08)' },
-  ];
-
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }} className="animate-fadeIn">
-      {/* Welcome + score */}
-      <div className="card-dark p-6" style={{ position: 'relative', overflow: 'hidden' }}>
-        <div style={{ position: 'absolute', top: 0, right: 0, width: '300px', height: '100%', background: 'radial-gradient(ellipse at right, rgba(212,175,55,0.05) 0%, transparent 70%)', pointerEvents: 'none' }} />
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '20px' }}>
-          <div>
-            <p style={{ color: '#555', fontSize: '0.8rem', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Welcome back</p>
-            <h1 style={{ fontSize: '1.8rem', fontWeight: 800, color: '#EAEAEA', margin: 0, fontFamily: 'Poppins, Inter, sans-serif' }}>
-              {user?.name?.split(' ')[0]}{' '}
-              <span style={{ color: '#D4AF37' }}>👋</span>
-            </h1>
-            <p style={{ color: '#555', fontSize: '0.875rem', marginTop: '6px' }}>
-              {quickStats.currentStreak > 0 ? `🔥 ${quickStats.currentStreak}-day streak — keep it going!` : 'Log a session today to start your streak.'}
-            </p>
-          </div>
-
-          {/* Productivity score ring */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-            <div style={{ position: 'relative', width: '80px', height: '80px' }}>
-              <svg width="80" height="80" style={{ transform: 'rotate(-90deg)' }}>
-                <circle cx="40" cy="40" r="36" fill="none" stroke="rgba(212,175,55,0.1)" strokeWidth="6" />
-                <circle cx="40" cy="40" r="36" fill="none" stroke="url(#scoreGrad)" strokeWidth="6"
-                  strokeDasharray={circumference}
-                  strokeDashoffset={circumference * (1 - productivityScore / 100)}
-                  strokeLinecap="round"
-                  style={{ transition: 'stroke-dashoffset 1.2s ease' }}
-                />
-                <defs>
-                  <linearGradient id="scoreGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-                    <stop offset="0%" stopColor="#FFD700" />
-                    <stop offset="100%" stopColor="#D4AF37" />
-                  </linearGradient>
-                </defs>
-              </svg>
-              <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-                <span style={{ fontSize: '1.1rem', fontWeight: 800, color: '#D4AF37', lineHeight: 1 }}>{productivityScore}</span>
-                <span style={{ fontSize: '0.55rem', color: '#555' }}>score</span>
-              </div>
-            </div>
-            <div>
-              <div style={{ fontSize: '0.75rem', fontWeight: 600, color: '#EAEAEA', marginBottom: '2px' }}>Productivity</div>
-              <div style={{ fontSize: '0.7rem', color: productivityScore >= 70 ? '#22c55e' : productivityScore >= 40 ? '#D4AF37' : '#ef4444' }}>
-                {productivityScore >= 70 ? 'Excellent' : productivityScore >= 40 ? 'Good' : 'Needs work'}
-              </div>
-              <div style={{ display: 'flex', gap: '12px', marginTop: '8px' }}>
-                <div style={{ textAlign: 'center' }}>
-                  <div style={{ fontSize: '1rem', fontWeight: 700, color: '#EAEAEA' }}>{quickStats.totalActivities}</div>
-                  <div style={{ fontSize: '0.6rem', color: '#444', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Sessions</div>
-                </div>
-                <div style={{ width: '1px', background: 'rgba(212,175,55,0.15)' }} />
-                <div style={{ textAlign: 'center' }}>
-                  <div style={{ fontSize: '1rem', fontWeight: 700, color: '#D4AF37' }}>{quickStats.problemsSolved}</div>
-                  <div style={{ fontSize: '0.6rem', color: '#444', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Solved</div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Stat cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '12px' }}>
-        {statCards.map((s, i) => (
-          <div key={i} className="stat-card" style={{ background: s.bg, borderColor: `${s.color}30` }}>
-            <div style={{ fontSize: '1.2rem', color: s.color, marginBottom: '10px' }}>{s.icon}</div>
-            <div style={{ fontSize: '1.6rem', fontWeight: 800, color: '#EAEAEA', marginBottom: '2px' }}>{s.value}</div>
-            <div style={{ fontSize: '0.7rem', color: '#555', textTransform: 'uppercase', letterSpacing: '0.1em' }}>{s.label}</div>
-          </div>
-        ))}
-      </div>
-
-      {/* Daily motivation */}
-      <DailyMotivation />
-
-      {/* Heatmap + Stats */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-        <div className="card-dark p-5">
-          <h3 style={{ fontSize: '0.85rem', fontWeight: 600, color: '#D4AF37', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '16px' }}>Activity Heatmap</h3>
-          <SimpleHeatmap activities={activities} />
-        </div>
-        <div className="card-dark p-5">
-          <h3 style={{ fontSize: '0.85rem', fontWeight: 600, color: '#D4AF37', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '16px' }}>Progress Stats</h3>
-          <ProgressStats activities={activities} />
-        </div>
-      </div>
-
-      {/* Action row */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '16px' }}>
-        <div className="card-dark p-5">
-          <h3 style={{ fontSize: '0.85rem', fontWeight: 600, color: '#D4AF37', marginBottom: '14px' }}>Log Activity</h3>
-          <RoleBasedRoute allowedRoles={user?.role === 'admin' ? ['admin'] : ['admin', 'user']}>
-            <ActivityForm onAddActivity={addActivity} />
-          </RoleBasedRoute>
-        </div>
-        <QuickAddProblem onAddActivity={addActivity} />
-        <div className="card-dark p-5">
-          <StreakTracker activities={activities} />
-        </div>
-      </div>
-    </div>
-  );
-};
-
-/* ── Root ──────────────────────────────────────────────────────── */
 const App: React.FC = () => (
-  <GoogleOAuthProvider clientId={import.meta.env.VITE_GOOGLE_CLIENT_ID || ''}>
-    <AuthProvider>
-      <AppContent />
-    </AuthProvider>
-  </GoogleOAuthProvider>
+    <ErrorBoundary>
+        <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
+            <AuthProvider>
+                <ToastProvider>
+                    <AppContent />
+                </ToastProvider>
+            </AuthProvider>
+        </GoogleOAuthProvider>
+    </ErrorBoundary>
 );
 
 export default App;

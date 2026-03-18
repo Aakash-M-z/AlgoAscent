@@ -1,348 +1,158 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 
-interface SolutionResource {
-  id: string;
-  problemName: string;
-  difficulty: 'Easy' | 'Medium' | 'Hard';
-  category: string;
-  resources: {
-    type: 'video' | 'article' | 'website';
-    title: string;
-    url: string;
-    author: string;
-    platform: string;
-    duration?: string;
-    quality: 'beginner' | 'intermediate' | 'advanced';
-  }[];
-}
+interface Resource { type: 'video' | 'article' | 'website'; title: string; url: string; author: string; platform: string; duration?: string; quality: 'beginner' | 'intermediate' | 'advanced'; }
+interface Problem { id: string; name: string; difficulty: 'Easy' | 'Medium' | 'Hard'; category: string; resources: Resource[]; }
 
-const SOLUTION_RESOURCES: SolutionResource[] = [
+const DATA: Problem[] = [
   {
-    id: 'two-sum',
-    problemName: 'Two Sum',
-    difficulty: 'Easy',
-    category: 'Arrays & Strings',
-    resources: [
-      {
-        type: 'video',
-        title: 'Two Sum - LeetCode Solution Explained',
-        url: 'https://www.youtube.com/watch?v=KLlXCFG5TnA',
-        author: 'NeetCode',
-        platform: 'YouTube',
-        duration: '5:32',
-        quality: 'beginner'
-      },
-      {
-        type: 'article',
-        title: 'Two Sum Problem - Multiple Approaches',
-        url: 'https://leetcode.com/problems/two-sum/solution/',
-        author: 'LeetCode',
-        platform: 'LeetCode',
-        quality: 'intermediate'
-      },
-      {
-        type: 'video',
-        title: 'Two Sum Solution in Multiple Languages',
-        url: 'https://www.youtube.com/watch?v=Ivyh3V4HuGc',
-        author: 'Tech With Tim',
-        platform: 'YouTube',
-        duration: '8:15',
-        quality: 'beginner'
-      }
+    id: 'two-sum', name: 'Two Sum', difficulty: 'Easy', category: 'Arrays & Strings', resources: [
+      { type: 'video', title: 'Two Sum - LeetCode Solution Explained', url: 'https://www.youtube.com/watch?v=KLlXCFG5TnA', author: 'NeetCode', platform: 'YouTube', duration: '5:32', quality: 'beginner' },
+      { type: 'article', title: 'Two Sum - Multiple Approaches', url: 'https://leetcode.com/problems/two-sum/solution/', author: 'LeetCode', platform: 'LeetCode', quality: 'intermediate' },
     ]
   },
   {
-    id: 'valid-parentheses',
-    problemName: 'Valid Parentheses',
-    difficulty: 'Easy',
-    category: 'Stacks & Queues',
-    resources: [
-      {
-        type: 'video',
-        title: 'Valid Parentheses - Stack Solution',
-        url: 'https://www.youtube.com/watch?v=WTzjTskDFMg',
-        author: 'NeetCode',
-        platform: 'YouTube',
-        duration: '6:45',
-        quality: 'beginner'
-      },
-      {
-        type: 'article',
-        title: 'Understanding Stack-based Solutions',
-        url: 'https://www.geeksforgeeks.org/check-for-balanced-parentheses-in-an-expression/',
-        author: 'GeeksforGeeks',
-        platform: 'GeeksforGeeks',
-        quality: 'intermediate'
-      }
+    id: 'valid-parens', name: 'Valid Parentheses', difficulty: 'Easy', category: 'Stacks & Queues', resources: [
+      { type: 'video', title: 'Valid Parentheses - Stack Solution', url: 'https://www.youtube.com/watch?v=WTzjTskDFMg', author: 'NeetCode', platform: 'YouTube', duration: '6:45', quality: 'beginner' },
+      { type: 'article', title: 'Understanding Stack-based Solutions', url: 'https://www.geeksforgeeks.org/check-for-balanced-parentheses-in-an-expression/', author: 'GeeksforGeeks', platform: 'GFG', quality: 'intermediate' },
     ]
   },
   {
-    id: 'merge-sorted-lists',
-    problemName: 'Merge Two Sorted Lists',
-    difficulty: 'Easy',
-    category: 'Linked Lists',
-    resources: [
-      {
-        type: 'video',
-        title: 'Merge Two Sorted Lists - Recursive & Iterative',
-        url: 'https://www.youtube.com/watch?v=XIdigk956u0',
-        author: 'NeetCode',
-        platform: 'YouTube',
-        duration: '7:22',
-        quality: 'beginner'
-      },
-      {
-        type: 'article',
-        title: 'Linked List Merging Techniques',
-        url: 'https://www.programiz.com/dsa/merge-sort',
-        author: 'Programiz',
-        platform: 'Programiz',
-        quality: 'intermediate'
-      }
+    id: 'merge-lists', name: 'Merge Two Sorted Lists', difficulty: 'Easy', category: 'Linked Lists', resources: [
+      { type: 'video', title: 'Merge Two Sorted Lists - Recursive & Iterative', url: 'https://www.youtube.com/watch?v=XIdigk956u0', author: 'NeetCode', platform: 'YouTube', duration: '7:22', quality: 'beginner' },
     ]
   },
   {
-    id: 'maximum-subarray',
-    problemName: 'Maximum Subarray (Kadane\'s Algorithm)',
-    difficulty: 'Medium',
-    category: 'Dynamic Programming',
-    resources: [
-      {
-        type: 'video',
-        title: 'Kadane\'s Algorithm Explained',
-        url: 'https://www.youtube.com/watch?v=5WZl3MMT0Eg',
-        author: 'NeetCode',
-        platform: 'YouTube',
-        duration: '9:15',
-        quality: 'intermediate'
-      },
-      {
-        type: 'article',
-        title: 'Dynamic Programming - Maximum Subarray',
-        url: 'https://www.geeksforgeeks.org/largest-sum-contiguous-subarray/',
-        author: 'GeeksforGeeks',
-        platform: 'GeeksforGeeks',
-        quality: 'advanced'
-      },
-      {
-        type: 'video',
-        title: 'Kadane\'s Algorithm Visualization',
-        url: 'https://www.youtube.com/watch?v=86CQq3pKSUw',
-        author: 'Back To Back SWE',
-        platform: 'YouTube',
-        duration: '12:30',
-        quality: 'advanced'
-      }
+    id: 'max-subarray', name: "Maximum Subarray (Kadane's)", difficulty: 'Medium', category: 'Dynamic Programming', resources: [
+      { type: 'video', title: "Kadane's Algorithm Explained", url: 'https://www.youtube.com/watch?v=5WZl3MMT0Eg', author: 'NeetCode', platform: 'YouTube', duration: '9:15', quality: 'intermediate' },
+      { type: 'article', title: 'DP - Maximum Subarray', url: 'https://www.geeksforgeeks.org/largest-sum-contiguous-subarray/', author: 'GeeksforGeeks', platform: 'GFG', quality: 'advanced' },
     ]
   },
   {
-    id: 'binary-tree-traversal',
-    problemName: 'Binary Tree Inorder Traversal',
-    difficulty: 'Easy',
-    category: 'Trees & Binary Trees',
-    resources: [
-      {
-        type: 'video',
-        title: 'Tree Traversals - Inorder, Preorder, Postorder',
-        url: 'https://www.youtube.com/watch?v=BHB0B1jFKUE',
-        author: 'NeetCode',
-        platform: 'YouTube',
-        duration: '11:45',
-        quality: 'beginner'
-      },
-      {
-        type: 'article',
-        title: 'Binary Tree Traversal Methods',
-        url: 'https://www.geeksforgeeks.org/tree-traversals-inorder-preorder-and-postorder/',
-        author: 'GeeksforGeeks',
-        platform: 'GeeksforGeeks',
-        quality: 'intermediate'
-      }
+    id: 'tree-traversal', name: 'Binary Tree Inorder Traversal', difficulty: 'Easy', category: 'Trees & Binary Trees', resources: [
+      { type: 'video', title: 'Tree Traversals - Inorder, Preorder, Postorder', url: 'https://www.youtube.com/watch?v=BHB0B1jFKUE', author: 'NeetCode', platform: 'YouTube', duration: '11:45', quality: 'beginner' },
+      { type: 'article', title: 'Binary Tree Traversal Methods', url: 'https://www.geeksforgeeks.org/tree-traversals-inorder-preorder-and-postorder/', author: 'GeeksforGeeks', platform: 'GFG', quality: 'intermediate' },
     ]
-  }
+  },
 ];
 
+const DIFF_COLOR: Record<string, { color: string; bg: string }> = {
+  Easy: { color: '#22c55e', bg: 'rgba(34,197,94,0.1)' },
+  Medium: { color: '#f59e0b', bg: 'rgba(245,158,11,0.1)' },
+  Hard: { color: '#ef4444', bg: 'rgba(239,68,68,0.1)' },
+};
+const QUAL_COLOR: Record<string, { color: string; bg: string }> = {
+  beginner: { color: '#22c55e', bg: 'rgba(34,197,94,0.08)' },
+  intermediate: { color: '#f59e0b', bg: 'rgba(245,158,11,0.08)' },
+  advanced: { color: '#ef4444', bg: 'rgba(239,68,68,0.08)' },
+};
+const TYPE_ICON: Record<string, string> = { video: '🎥', article: '📖', website: '🌐' };
+
+const inputStyle: React.CSSProperties = {
+  padding: '9px 14px', background: '#1A1A1A',
+  border: '1px solid rgba(255,255,255,0.08)', borderRadius: '10px',
+  color: '#EAEAEA', fontSize: '0.875rem', outline: 'none', width: '100%', boxSizing: 'border-box',
+};
+
 const SolutionResources: React.FC = () => {
-  const [searchTerm, setSearchTerm] = useState('');
-  const [selectedDifficulty, setSelectedDifficulty] = useState<string>('');
-  const [selectedCategory, setSelectedCategory] = useState<string>('');
+  const [search, setSearch] = useState('');
+  const [diff, setDiff] = useState('');
+  const [cat, setCat] = useState('');
 
-  const filteredResources = SOLUTION_RESOURCES.filter((resource) => {
-    const matchesSearch = resource.problemName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         resource.category.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesDifficulty = !selectedDifficulty || resource.difficulty === selectedDifficulty;
-    const matchesCategory = !selectedCategory || resource.category === selectedCategory;
-    
-    return matchesSearch && matchesDifficulty && matchesCategory;
-  });
+  const categories = useMemo(() => [...new Set(DATA.map(d => d.category))], []);
 
-  const getResourceIcon = (type: string) => {
-    switch (type) {
-      case 'video': return '🎥';
-      case 'article': return '📖';
-      case 'website': return '🌐';
-      default: return '📄';
-    }
-  };
-
-  const getQualityColor = (quality: string) => {
-    switch (quality) {
-      case 'beginner': return 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400';
-      case 'intermediate': return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400';
-      case 'advanced': return 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400';
-      default: return 'bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-400';
-    }
-  };
-
-  const getDifficultyColor = (difficulty: string) => {
-    switch (difficulty) {
-      case 'Easy': return 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400';
-      case 'Medium': return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400';
-      case 'Hard': return 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400';
-      default: return 'bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-400';
-    }
-  };
-
-  const categories = [...new Set(SOLUTION_RESOURCES.map(r => r.category))];
+  const filtered = useMemo(() => DATA.filter(p =>
+    (!search || p.name.toLowerCase().includes(search.toLowerCase()) || p.category.toLowerCase().includes(search.toLowerCase())) &&
+    (!diff || p.difficulty === diff) &&
+    (!cat || p.category === cat)
+  ), [search, diff, cat]);
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="bg-gradient-to-r from-indigo-100 to-purple-100 dark:from-indigo-900/30 dark:to-purple-900/30 rounded-2xl p-6 border border-indigo-200 dark:border-indigo-700">
-        <h2 className="text-2xl font-bold text-gray-800 dark:text-white flex items-center gap-3 mb-2">
-          <span className="text-3xl">🎓</span>
-          Solution Resources
-        </h2>
-        <p className="text-indigo-700 dark:text-indigo-300 text-sm">
-          Video tutorials, articles, and guides to help you understand DSA problems better
-        </p>
+    <div className="section-gap animate-fadeIn">
+      <div>
+        <h2 className="page-heading">Solution Resources</h2>
+        <p className="page-subheading">Video tutorials and articles to help you understand DSA problems</p>
       </div>
 
       {/* Filters */}
-      <div className="bg-white dark:bg-gray-800 rounded-xl p-6 border border-gray-200 dark:border-gray-700">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              Search Problems
-            </label>
-            <input
-              type="text"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Search by problem name or category..."
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white"
-            />
-          </div>
-          
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              Difficulty
-            </label>
-            <select
-              value={selectedDifficulty}
-              onChange={(e) => setSelectedDifficulty(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white"
-            >
-              <option value="">All Difficulties</option>
-              <option value="Easy">Easy</option>
-              <option value="Medium">Medium</option>
-              <option value="Hard">Hard</option>
-            </select>
-          </div>
-          
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              Category
-            </label>
-            <select
-              value={selectedCategory}
-              onChange={(e) => setSelectedCategory(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white"
-            >
-              <option value="">All Categories</option>
-              {categories.map((category) => (
-                <option key={category} value={category}>{category}</option>
-              ))}
-            </select>
-          </div>
+      <div className="card-dark" style={{ padding: '16px 20px', display: 'grid', gridTemplateColumns: '1fr auto auto', gap: '12px', alignItems: 'end' }}>
+        <div>
+          <div className="kpi-sub" style={{ marginBottom: '6px' }}>Search</div>
+          <input style={inputStyle} placeholder="Problem name or category..." value={search} onChange={e => setSearch(e.target.value)}
+            onFocus={e => { e.currentTarget.style.borderColor = '#D4AF37'; }}
+            onBlur={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)'; }}
+          />
+        </div>
+        <div>
+          <div className="kpi-sub" style={{ marginBottom: '6px' }}>Difficulty</div>
+          <select style={{ ...inputStyle, width: 'auto', cursor: 'pointer' }} value={diff} onChange={e => setDiff(e.target.value)}>
+            <option value="">All</option>
+            <option>Easy</option><option>Medium</option><option>Hard</option>
+          </select>
+        </div>
+        <div>
+          <div className="kpi-sub" style={{ marginBottom: '6px' }}>Category</div>
+          <select style={{ ...inputStyle, width: 'auto', cursor: 'pointer' }} value={cat} onChange={e => setCat(e.target.value)}>
+            <option value="">All</option>
+            {categories.map(c => <option key={c}>{c}</option>)}
+          </select>
         </div>
       </div>
 
-      {/* Resources Grid */}
-      <div className="space-y-6">
-        {filteredResources.map((resource) => (
-          <div key={resource.id} className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 overflow-hidden shadow-lg hover:shadow-xl transition-all duration-300">
-            {/* Header */}
-            <div className="bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-indigo-900/20 dark:to-purple-900/20 p-6 border-b border-gray-200 dark:border-gray-700">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <div>
-                  <h3 className="text-xl font-bold text-gray-800 dark:text-white">{resource.problemName}</h3>
-                  <p className="text-indigo-600 dark:text-indigo-400 text-sm">{resource.category}</p>
+      {/* Problem cards */}
+      {filtered.length === 0 ? (
+        <div style={{ textAlign: 'center', padding: '60px 20px' }}>
+          <div style={{ fontSize: '2.5rem', opacity: 0.2, marginBottom: '12px' }}>🔍</div>
+          <p style={{ color: '#555', fontSize: '0.9rem' }}>No resources match your filters.</p>
+        </div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+          {filtered.map(problem => {
+            const dc = DIFF_COLOR[problem.difficulty];
+            return (
+              <div key={problem.id} className="card-dark" style={{ overflow: 'hidden' }}>
+                {/* Problem header */}
+                <div style={{ padding: '16px 20px', borderBottom: '1px solid rgba(255,255,255,0.05)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
+                  <div>
+                    <div style={{ fontSize: '0.95rem', fontWeight: 700, color: '#EAEAEA' }}>{problem.name}</div>
+                    <div className="kpi-sub" style={{ marginTop: '2px' }}>{problem.category}</div>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span style={{ fontSize: '0.7rem', padding: '3px 10px', borderRadius: '999px', fontWeight: 600, background: dc.bg, color: dc.color }}>{problem.difficulty}</span>
+                    <span className="kpi-sub">{problem.resources.length} resources</span>
+                  </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  <span className={`px-3 py-1 rounded-full text-xs font-medium ${getDifficultyColor(resource.difficulty)}`}>
-                    {resource.difficulty}
-                  </span>
-                  <span className="text-gray-500 dark:text-gray-400 text-sm">
-                    {resource.resources.length} resources
-                  </span>
-                </div>
-              </div>
-            </div>
 
-            {/* Resources */}
-            <div className="p-6">
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                {resource.resources.map((res, index) => (
-                  <div key={index} className="bg-gray-50 dark:bg-gray-700/50 rounded-xl p-4 hover:bg-gray-100 dark:hover:bg-gray-700 transition-all duration-200">
-                    <div className="flex items-start gap-3">
-                      <div className="text-2xl">{getResourceIcon(res.type)}</div>
-                      <div className="flex-1 min-w-0">
-                        <h4 className="font-semibold text-gray-800 dark:text-white text-sm mb-1 truncate">
-                          {res.title}
-                        </h4>
-                        <div className="flex items-center gap-2 mb-2">
-                          <span className="text-xs text-gray-600 dark:text-gray-400">
-                            by {res.author} • {res.platform}
-                          </span>
-                          {res.duration && (
-                            <span className="text-xs text-blue-600 dark:text-blue-400 bg-blue-100 dark:bg-blue-900/30 px-2 py-0.5 rounded">
-                              {res.duration}
-                            </span>
-                          )}
-                        </div>
-                        <div className="flex items-center justify-between">
-                          <span className={`px-2 py-1 rounded text-xs font-medium ${getQualityColor(res.quality)}`}>
-                            {res.quality}
-                          </span>
-                          <a
-                            href={res.url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 text-sm font-medium hover:underline"
-                          >
-                            View Resource →
-                          </a>
+                {/* Resources */}
+                <div style={{ padding: '14px 20px', display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '10px' }}>
+                  {problem.resources.map((r, i) => {
+                    const qc = QUAL_COLOR[r.quality];
+                    return (
+                      <div key={i} style={{ padding: '12px 14px', background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '10px', display: 'flex', gap: '10px', alignItems: 'flex-start', transition: 'background 0.2s' }}
+                        onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = 'rgba(212,175,55,0.04)'}
+                        onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.02)'}
+                      >
+                        <span style={{ fontSize: '1.2rem', flexShrink: 0 }}>{TYPE_ICON[r.type]}</span>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: '0.825rem', fontWeight: 600, color: '#EAEAEA', marginBottom: '3px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.title}</div>
+                          <div className="kpi-sub" style={{ marginBottom: '8px' }}>
+                            {r.author} · {r.platform}{r.duration ? ` · ${r.duration}` : ''}
+                          </div>
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                            <span style={{ fontSize: '0.65rem', padding: '2px 8px', borderRadius: '999px', background: qc.bg, color: qc.color, fontWeight: 600, textTransform: 'capitalize' }}>{r.quality}</span>
+                            <a href={r.url} target="_blank" rel="noopener noreferrer"
+                              style={{ fontSize: '0.75rem', color: '#D4AF37', fontWeight: 600, textDecoration: 'none' }}
+                              onMouseEnter={e => (e.currentTarget as HTMLElement).style.textDecoration = 'underline'}
+                              onMouseLeave={e => (e.currentTarget as HTMLElement).style.textDecoration = 'none'}
+                            >View →</a>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  </div>
-                ))}
+                    );
+                  })}
+                </div>
               </div>
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {filteredResources.length === 0 && (
-        <div className="text-center py-12 bg-gray-50 dark:bg-gray-800/50 rounded-xl">
-          <div className="text-6xl mb-4">🔍</div>
-          <h3 className="text-lg font-semibold text-gray-700 dark:text-gray-300 mb-2">
-            No resources found
-          </h3>
-          <p className="text-gray-500 dark:text-gray-400">
-            Try adjusting your search filters to find more resources
-          </p>
+            );
+          })}
         </div>
       )}
     </div>
