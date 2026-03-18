@@ -12,224 +12,178 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const api = express.Router();
 
-app.use(cors());
-// Convert JSON bodies
+app.use(cors({ origin: '*', methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'] }));
 app.use(express.json());
 
-// Health check endpoint
-api.get('/health', (req, res) => {
+// Health check
+api.get('/health', (_req, res) => {
     res.status(200).json({ status: 'OK', timestamp: new Date().toISOString() });
 });
 
-// Auth routes
+// Login
 api.post('/login', async (req, res) => {
     try {
         const { email, password } = req.body;
-        const user = await storage.getUserByEmail(email);
+        if (!email || !password)
+            return res.status(400).json({ error: 'Email and password are required' });
 
-        // In a real app, use bcrypt or similar for password hashing comparison
-        if (!user || user.password !== password) {
+        const user = await storage.getUserByEmail(email.trim().toLowerCase());
+        if (!user || user.password !== password)
             return res.status(401).json({ error: 'Invalid email or password' });
-        }
 
         res.json(user);
     } catch (error) {
-        console.error('Error logging in:', error);
-        res.status(500).json({ error: 'Internal server error' });
+        console.error('Login error:', error);
+        res.status(500).json({ error: 'Server error. Please try again.' });
     }
 });
 
-// User routes
-api.get('/users/:id', async (req, res) => {
-    try {
-        const id = req.params.id;
-        const user = await storage.getUser(id);
-        if (!user) {
-            return res.status(404).json({ error: 'User not found' });
-        }
-        res.json(user);
-    } catch (error) {
-        console.error('Error fetching user:', error);
-        res.status(500).json({ error: 'Internal server error' });
-    }
-});
-
-api.get('/users/by-username/:username', async (req, res) => {
-    try {
-        const username = req.params.username;
-        const user = await storage.getUserByUsername(username);
-        if (!user) {
-            return res.status(404).json({ error: 'User not found' });
-        }
-        res.json(user);
-    } catch (error) {
-        console.error('Error fetching user by username:', error);
-        res.status(500).json({ error: 'Internal server error' });
-    }
-});
-
+// Register
 api.post('/register', async (req, res) => {
     try {
         const userData: InsertUser = req.body;
+        if (!userData.email || !userData.password || !userData.username)
+            return res.status(400).json({ error: 'Email, password and username are required' });
 
-        // Check if user already exists
-        const existingUser = await storage.getUserByEmail(userData.email);
-        if (existingUser) {
-            return res.status(409).json({ error: 'User with this email already exists' });
-        }
+        userData.email = userData.email.trim().toLowerCase();
 
-        const existingUsername = await storage.getUserByUsername(userData.username);
-        if (existingUsername) {
-            return res.status(409).json({ error: 'User with this username already exists' });
-        }
+        if (await storage.getUserByEmail(userData.email))
+            return res.status(409).json({ error: 'An account with this email already exists' });
+
+        if (await storage.getUserByUsername(userData.username))
+            return res.status(409).json({ error: 'This username is already taken' });
 
         const user = await storage.createUser(userData);
         res.status(201).json(user);
     } catch (error) {
-        console.error('Error creating user:', error);
-        res.status(500).json({ error: 'Internal server error' });
+        console.error('Register error:', error);
+        res.status(500).json({ error: 'Server error. Please try again.' });
     }
 });
 
+// Google Auth
 api.post('/auth/google', async (req, res) => {
     try {
         const { token } = req.body;
+        if (!token) return res.status(400).json({ error: 'Token is required' });
 
-        // Fetch user info from Google
         const googleUserRes = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
             headers: { Authorization: `Bearer ${token}` }
         });
-
-        if (!googleUserRes.ok) {
+        if (!googleUserRes.ok)
             return res.status(401).json({ error: 'Failed to authenticate with Google' });
-        }
 
-        const googleUser = await googleUserRes.json();
-        const { email, name } = googleUser;
+        const { email } = await googleUserRes.json();
+        if (!email) return res.status(400).json({ error: 'Google account has no email' });
 
-        if (!email) {
-            return res.status(400).json({ error: 'Google account has no email' });
-        }
-
-        // Check if user exists
         let user = await storage.getUserByEmail(email);
-
         if (user) {
-            // **Force Update Role if it matches the specific admin email**
-            if (email === 'aakashleo420@gmail.com' && user.role !== 'admin') {
+            if (email === 'aakashleo420@gmail.com' && user.role !== 'admin')
                 user = await storage.updateUser(user.id, { role: 'admin' });
-            }
         } else {
-            // Create new user
-            // Generate a unique username based on email
             const baseUsername = email.split('@')[0];
             let username = baseUsername;
             let counter = 1;
+            while (await storage.getUserByUsername(username))
+                username = `${baseUsername}${counter++}`;
 
-            // Check for uniqueness
-            while (await storage.getUserByUsername(username)) {
-                username = `${baseUsername}${counter}`;
-                counter++;
-            }
-
-            const newUser: InsertUser = {
+            user = await storage.createUser({
                 username,
                 email,
-                password: Math.random().toString(36).slice(-10), // Dummy password
+                password: Math.random().toString(36).slice(-10),
                 role: email === 'aakashleo420@gmail.com' ? 'admin' : 'user'
-            };
-
-            user = await storage.createUser(newUser);
+            });
         }
-
         res.json(user);
     } catch (error) {
         console.error('Google auth error:', error);
-        res.status(500).json({ error: 'Internal server error' });
+        res.status(500).json({ error: 'Server error. Please try again.' });
     }
 });
 
-// Deprecated or internal use only
+// Get user by ID
+api.get('/users/:id', async (req, res) => {
+    try {
+        const user = await storage.getUser(req.params.id);
+        if (!user) return res.status(404).json({ error: 'User not found' });
+        res.json(user);
+    } catch (error) {
+        res.status(500).json({ error: 'Server error. Please try again.' });
+    }
+});
+
+// Get user by username
+api.get('/users/by-username/:username', async (req, res) => {
+    try {
+        const user = await storage.getUserByUsername(req.params.username);
+        if (!user) return res.status(404).json({ error: 'User not found' });
+        res.json(user);
+    } catch (error) {
+        res.status(500).json({ error: 'Server error. Please try again.' });
+    }
+});
+
+// Create user (internal)
 api.post('/users', async (req, res) => {
     try {
-        const userData: InsertUser = req.body;
-        const user = await storage.createUser(userData);
+        const user = await storage.createUser(req.body);
         res.status(201).json(user);
     } catch (error) {
-        console.error('Error creating user:', error);
-        res.status(500).json({ error: 'Internal server error' });
+        res.status(500).json({ error: 'Server error. Please try again.' });
     }
 });
 
-// Activity routes
+// Get activities
 api.get('/users/:userId/activities', async (req, res) => {
     try {
-        const userId = req.params.userId;
-        const activities = await storage.getUserActivities(userId);
+        const activities = await storage.getUserActivities(req.params.userId);
         res.json(activities);
     } catch (error) {
-        console.error('Error fetching activities:', error);
-        res.status(500).json({ error: 'Internal server error' });
+        res.status(500).json({ error: 'Server error. Please try again.' });
     }
 });
 
+// Create activity
 api.post('/activities', async (req, res) => {
     try {
-        const activityData: InsertActivity = req.body;
-        const activity = await storage.createActivity(activityData);
+        const activity = await storage.createActivity(req.body as InsertActivity);
         res.status(201).json(activity);
     } catch (error) {
-        console.error('Error creating activity:', error);
-        res.status(500).json({ error: 'Internal server error' });
+        res.status(500).json({ error: 'Server error. Please try again.' });
     }
 });
 
+// Update activity
 api.put('/activities/:id', async (req, res) => {
     try {
-        const id = req.params.id;
-        const activityData = req.body;
-        const activity = await storage.updateActivity(id, activityData);
-        if (!activity) {
-            return res.status(404).json({ error: 'Activity not found' });
-        }
+        const activity = await storage.updateActivity(req.params.id, req.body);
+        if (!activity) return res.status(404).json({ error: 'Activity not found' });
         res.json(activity);
     } catch (error) {
-        console.error('Error updating activity:', error);
-        res.status(500).json({ error: 'Internal server error' });
+        res.status(500).json({ error: 'Server error. Please try again.' });
     }
 });
 
+// Delete activity
 api.delete('/activities/:id', async (req, res) => {
     try {
-        const id = req.params.id;
-        const deleted = await storage.deleteActivity(id);
-        if (!deleted) {
-            return res.status(404).json({ error: 'Activity not found' });
-        }
+        const deleted = await storage.deleteActivity(req.params.id);
+        if (!deleted) return res.status(404).json({ error: 'Activity not found' });
         res.status(204).send();
     } catch (error) {
-        console.error('Error deleting activity:', error);
-        res.status(500).json({ error: 'Internal server error' });
+        res.status(500).json({ error: 'Server error. Please try again.' });
     }
 });
 
-// Register the API router
-// Mount at /api for standard requests
 app.use('/api', api);
-// Mount at / for requests where /api has been stripped by Vercel rewrites
 app.use('/', api);
 
-
-// Serve static files in production (BUT SKIP if running in Vercel)
 if (process.env.NODE_ENV === 'production' && process.env.VERCEL !== '1') {
     const distPath = path.resolve(__dirname, '../dist');
     app.use(express.static(distPath));
-
-    // Handle SPA routing: serve index.html for all non-API routes
     app.get('*', (req, res) => {
-        if (!req.path.startsWith('/api')) {
+        if (!req.path.startsWith('/api'))
             res.sendFile(path.resolve(distPath, 'index.html'));
-        }
     });
 }
 
