@@ -260,9 +260,9 @@ const AnalyticsDashboard: React.FC<Props> = ({ activities }) => {
                             <YAxis tick={{ fill: '#555', fontSize: 11 }} axisLine={false} tickLine={false} allowDecimals={false} />
                             <Tooltip
                                 {...tooltipStyle}
-                                formatter={(value: number, name: string, props: any) => [
+                                formatter={(value, _name, props) => [
                                     `${value} problems`,
-                                    props.payload.name,
+                                    (props as any)?.payload?.name ?? _name,
                                 ]}
                             />
                             <Bar dataKey="count" radius={[6, 6, 0, 0]} animationDuration={1000} animationEasing="ease-out"
@@ -301,8 +301,9 @@ const AnalyticsDashboard: React.FC<Props> = ({ activities }) => {
                                         cx="50%" cy="50%"
                                         innerRadius={60} outerRadius={90}
                                         dataKey="value"
-                                        activeIndex={activePieIndex}
-                                        activeShape={renderActiveShape}
+                                        activeShape={(props: any) =>
+                                            props.index === activePieIndex ? renderActiveShape(props) : <Sector {...props} />
+                                        }
                                         onMouseEnter={(_, index) => setActivePieIndex(index)}
                                         animationBegin={0}
                                         animationDuration={1000}
@@ -316,7 +317,7 @@ const AnalyticsDashboard: React.FC<Props> = ({ activities }) => {
                                     </Pie>
                                     <Tooltip
                                         {...tooltipStyle}
-                                        formatter={(value: number, name: string) => [`${value} sessions`, name]}
+                                        formatter={(value, name) => [`${value} sessions`, name]}
                                     />
                                 </PieChart>
                             </ResponsiveContainer>
