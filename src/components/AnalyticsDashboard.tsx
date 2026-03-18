@@ -61,37 +61,35 @@ const AnalyticsDashboard: React.FC<Props> = ({ activities }) => {
     }
 
     return (
-        <div className="animate-fadeIn" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+        <div className="animate-fadeIn section-gap">
             <div>
-                <h2 style={{ fontSize: '1.4rem', fontWeight: 700, color: '#EAEAEA', margin: 0 }}>Analytics</h2>
-                <p style={{ color: '#555', fontSize: '0.8rem', margin: '2px 0 0' }}>Your productivity trends and insights</p>
+                <h2 className="page-heading">Analytics</h2>
+                <p className="page-subheading">Your productivity trends and insights</p>
             </div>
 
             {/* KPI row */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '12px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '12px' }}>
                 {[
                     { label: 'Completion Rate', value: `${completionRate}%`, color: '#22c55e', sub: 'problems solved' },
                     { label: 'Total Hours', value: `${totalHours}h`, color: '#D4AF37', sub: 'study time' },
                     { label: 'Avg / Day', value: avgPerDay, color: '#a78bfa', sub: 'sessions (7d)' },
                     { label: 'Topics', value: String(new Set(activities.map(a => a.category)).size), color: '#38bdf8', sub: 'categories' },
                 ].map((k, i) => (
-                    <div key={i} className="stat-card" style={{ textAlign: 'center' }}>
-                        <div style={{ fontSize: '1.8rem', fontWeight: 800, color: k.color, marginBottom: '4px' }}>{k.value}</div>
-                        <div style={{ fontSize: '0.8rem', fontWeight: 600, color: '#EAEAEA', marginBottom: '2px' }}>{k.label}</div>
-                        <div style={{ fontSize: '0.7rem', color: '#555' }}>{k.sub}</div>
+                    <div key={i} className="stat-card" style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                        <div className="kpi-number" style={{ color: k.color }}>{k.value}</div>
+                        <div className="kpi-label">{k.label}</div>
+                        <div className="kpi-sub">{k.sub}</div>
                     </div>
                 ))}
             </div>
 
             {/* Weekly bar chart */}
-            <div className="card-dark p-6">
-                <h3 style={{ fontSize: '0.85rem', fontWeight: 600, color: '#D4AF37', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '20px' }}>
-                    Weekly Activity — Last 7 Days
-                </h3>
+            <div className="card-dark" style={{ padding: '20px 24px' }}>
+                <div className="card-title" style={{ marginBottom: '20px' }}>Weekly Activity — Last 7 Days</div>
                 <div style={{ display: 'flex', alignItems: 'flex-end', gap: '8px', height: '110px' }}>
                     {weeklyData.map((d, i) => (
                         <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px', height: '100%', justifyContent: 'flex-end' }}>
-                            {d.count > 0 && <span style={{ fontSize: '0.7rem', color: '#D4AF37', fontWeight: 600 }}>{d.count}</span>}
+                            {d.count > 0 && <span style={{ fontSize: '0.72rem', color: '#D4AF37', fontWeight: 700 }}>{d.count}</span>}
                             <div style={{
                                 width: '100%',
                                 height: `${Math.max((d.count / maxCount) * 80, d.count > 0 ? 8 : 3)}px`,
@@ -100,7 +98,7 @@ const AnalyticsDashboard: React.FC<Props> = ({ activities }) => {
                                 boxShadow: d.count > 0 ? '0 0 8px rgba(212,175,55,0.25)' : 'none',
                                 transition: 'height 0.6s ease',
                             }} />
-                            <span style={{ fontSize: '0.7rem', color: '#555' }}>{d.day}</span>
+                            <span style={{ fontSize: '0.72rem', color: '#555' }}>{d.day}</span>
                         </div>
                     ))}
                 </div>
@@ -108,16 +106,14 @@ const AnalyticsDashboard: React.FC<Props> = ({ activities }) => {
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
                 {/* Category breakdown */}
-                <div className="card-dark p-5">
-                    <h3 style={{ fontSize: '0.85rem', fontWeight: 600, color: '#D4AF37', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '16px' }}>
-                        By Category
-                    </h3>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                <div className="card-dark" style={{ padding: '20px 24px' }}>
+                    <div className="card-title" style={{ marginBottom: '16px' }}>By Category</div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                         {categoryData.slice(0, 5).map((c, i) => (
                             <div key={c.cat}>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '5px' }}>
-                                    <span style={{ fontSize: '0.8rem', color: '#EAEAEA' }}>{c.cat}</span>
-                                    <span style={{ fontSize: '0.8rem', color: CAT_COLORS[i % CAT_COLORS.length], fontWeight: 600 }}>{c.pct}%</span>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
+                                    <span style={{ fontSize: '0.875rem', color: '#EAEAEA' }}>{c.cat}</span>
+                                    <span style={{ fontSize: '0.875rem', color: CAT_COLORS[i % CAT_COLORS.length], fontWeight: 700 }}>{c.pct}%</span>
                                 </div>
                                 <div style={{ height: '5px', background: 'rgba(255,255,255,0.05)', borderRadius: '999px', overflow: 'hidden' }}>
                                     <div style={{
@@ -132,12 +128,10 @@ const AnalyticsDashboard: React.FC<Props> = ({ activities }) => {
                 </div>
 
                 {/* Monthly trend */}
-                <div className="card-dark p-5">
-                    <h3 style={{ fontSize: '0.85rem', fontWeight: 600, color: '#D4AF37', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '16px' }}>
-                        Monthly Trend
-                    </h3>
+                <div className="card-dark" style={{ padding: '20px 24px' }}>
+                    <div className="card-title" style={{ marginBottom: '16px' }}>Monthly Trend</div>
                     {monthlyData.length === 0 ? (
-                        <p style={{ color: '#444', fontSize: '0.85rem' }}>Not enough data yet.</p>
+                        <p style={{ color: '#555', fontSize: '0.875rem' }}>Not enough data yet.</p>
                     ) : (
                         <div style={{ display: 'flex', alignItems: 'flex-end', gap: '6px', height: '90px' }}>
                             {monthlyData.map((m, i) => (
@@ -158,7 +152,7 @@ const AnalyticsDashboard: React.FC<Props> = ({ activities }) => {
             </div>
 
             {/* Completion ring + insights */}
-            <div className="card-dark p-6" style={{ display: 'flex', alignItems: 'center', gap: '32px', flexWrap: 'wrap' }}>
+            <div className="card-dark" style={{ padding: '24px', display: 'flex', alignItems: 'center', gap: '32px', flexWrap: 'wrap' }}>
                 <div style={{ position: 'relative', width: '100px', height: '100px', flexShrink: 0 }}>
                     <svg width="100" height="100" style={{ transform: 'rotate(-90deg)' }}>
                         <circle cx="50" cy="50" r="42" fill="none" stroke="rgba(212,175,55,0.1)" strokeWidth="8" />
@@ -177,18 +171,18 @@ const AnalyticsDashboard: React.FC<Props> = ({ activities }) => {
                     </svg>
                     <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
                         <span style={{ fontSize: '1.3rem', fontWeight: 800, color: '#D4AF37' }}>{completionRate}%</span>
-                        <span style={{ fontSize: '0.6rem', color: '#555' }}>solved</span>
+                        <span className="kpi-sub">solved</span>
                     </div>
                 </div>
                 <div style={{ flex: 1 }}>
-                    <h3 style={{ fontSize: '1rem', fontWeight: 700, color: '#EAEAEA', marginBottom: '8px' }}>Productivity Insights</h3>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                    <h3 style={{ fontSize: '1rem', fontWeight: 700, color: '#EAEAEA', marginBottom: '12px', margin: '0 0 12px' }}>Productivity Insights</h3>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                         {[
                             completionRate >= 70 ? '🔥 Excellent solve rate — you\'re in the top tier' : completionRate >= 40 ? '📈 Good progress — aim for 70%+ solve rate' : '💡 Focus on solving more problems to improve your rate',
                             totalHours >= 20 ? `⏱ ${totalHours}h invested — strong commitment` : `⏱ ${totalHours}h logged — try to hit 20h this month`,
                             parseFloat(avgPerDay) >= 1 ? `✓ Averaging ${avgPerDay} sessions/day this week` : `📅 Averaging ${avgPerDay} sessions/day — aim for 1+ daily`,
                         ].map((insight, i) => (
-                            <p key={i} style={{ fontSize: '0.82rem', color: '#888', margin: 0, lineHeight: 1.5 }}>{insight}</p>
+                            <p key={i} style={{ fontSize: '0.875rem', color: '#888', margin: 0, lineHeight: 1.6 }}>{insight}</p>
                         ))}
                     </div>
                 </div>
