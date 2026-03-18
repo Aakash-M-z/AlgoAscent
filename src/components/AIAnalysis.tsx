@@ -1,229 +1,327 @@
-import React, { useMemo } from 'react';
+import React, { useState, useCallback } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Sparkles, Brain, TrendingUp, AlertTriangle, Lightbulb, Target, RefreshCw, ChevronRight } from 'lucide-react';
 import { Activity } from '../types';
+import { databaseAPI } from '../api/database';
+import { useAuth } from '../contexts/AuthContext';
 
 interface AIAnalysisProps {
     activities: Activity[];
-    username?: string;
 }
 
 interface AnalysisResult {
-    trend: 'improving' | 'declining' | 'stagnant' | 'new';
-    trendLabel: string;
-    trendColor: string;
-    trendIcon: string;
-    keyMetrics: { label: string; value: string; icon: string; color: string }[];
-    suggestions: { title: string; desc: string; icon: string }[];
-    prediction: string;
-    motivation: string;
-    score: number;
+    strengths: string[];
+    weaknesses: string[];
+    suggestions: { topic: string; reason: string; priority: 'High' | 'Medium' | 'Low' }[];
+    nextProblems: { name: string; difficulty: 'Easy' | 'Medium' | 'Hard'; topic: string; reason: string }[];
+    overallAssessment: string;
+    nextMilestone: string;
 }
 
-const AIAnalysis: React.FC<AIAnalysisProps> = ({ activities, username }) => {
+const PRIORITY_META = {
+    High: { color: '#ef4444', bg: 'rgba(239,68,68,0.1)', border: 'rgba(239,68,68,0.25)', label: 'High Priority' },
+    Medium: { color: '#f59e0b', bg: 'rgba(245,158,11,0.1)', border: 'rgba(245,158,11,0.25)', label: 'Medium' },
+    Low: { color: '#22c55e', bg: 'rgba(34,197,94,0.1)', border: 'rgba(34,197,94,0.25)', label: 'Low' },
+};
 
-    const analysis = useMemo((): AnalysisResult => {
-        const now = new Date();
-        const last7 = activities.filter(a => {
-            const d = new Date(a.date);
-            return (now.getTime() - d.getTime()) / (1000 * 60 * 60 * 24) <= 7;
-        });
-        const prev7 = activities.filter(a => {
-            const days = (now.getTime() - new Date(a.date).getTime()) / (1000 * 60 * 60 * 24);
-            return days > 7 && days <= 14;
-        });
+/* ── Quick local stats (shown before/alongside AI result) ─────── */
+function buildLocalStats(activities: Activity[]) {
+    const topicMap: Record<string, { solved: number; total: number }> = {};
+    activities.forEach(a => {
+        const t = a.dsaTopic || a.category || 'General';
+        if (!topicMap[t]) topicMap[t] = { solved: 0, total: 0 };
+        topicMap[t].total++;
+        if (a.problemSolved) topicMap[t].solved++;
+    });
+    const sorted = Object.entries(topicMap).sort(([, a], [, b]) => b.solved - a.solved);
+    const strengths = sorted.filter(([, v]) => v.solved / Math.max(v.total, 1) >= 0.6 && v.solved >= 2).slice(0, 3);
+    const weaknesses = sorted.filter(([, v]) => v.solved / Math.max(v.total, 1) < 0.4 && v.total >= 1).slice(0, 3);
+    return { strengths, weaknesses, topicMap };
+}
 
-        const totalSolved = activities.filter(a => a.problemSolved).length;
-        const last7Solved = last7.filter(a => a.problemSolved).length;
-        const prev7Solved = prev7.filter(a => a.problemSolved).length;
-        const avgDuration = last7.length ? Math.round(last7.reduce((s, a) => s + a.duration, 0) / last7.length) : 0;
-        const totalTime = Math.round(activities.reduce((s, a) => s + a.duration, 0) / 60);
+const AIAnalysis: React.FC<AIAnalysisProps> = ({ activities }) => {
+    const { user } = useAuth();
+    const [result, setResult] = useState<AnalysisResult | null>(null);
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+    const [ran, setRan] = useState(false);
 
-        // Unique active days in last 7
-        const activeDays = new Set(last7.map(a => a.date.slice(0, 10))).size;
+    const localStats = buildLocalStats(activities);
 
-        // Difficulty breakdown
-        const hard = last7.filter(a => a.difficulty === 'Hard').length;
-        const medium = last7.filter(a => a.difficulty === 'Medium').length;
+    const runAnalysis = useCallback(async () => {
+        if (activities.length === 0) return;
+        setLoading(true);
+        setError(null);
 
-        // Trend detection
-        let trend: AnalysisResult['trend'] = 'new';
-        let trendLabel = 'Just Getting Started';
-        let trendColor = 'text-blue-400';
-        let trendIcon = '🌱';
+        // Map frontend activities to the shape the backend expects
+        const payload = activities.map(a => ({
+            topic: a.dsaTopic || a.category,
+            category: a.category,
+            difficulty: a.difficulty || 'Medium',
+            solved: a.problemSolved ?? false,
+            date: a.date,
+            timeSpent: a.duration,
+        }));
 
-        if (activities.length > 0) {
-            if (last7Solved > prev7Solved + 1) {
-                trend = 'improving'; trendLabel = 'Improving'; trendColor = 'text-green-400'; trendIcon = '📈';
-            } else if (last7Solved < prev7Solved - 1) {
-                trend = 'declining'; trendLabel = 'Declining'; trendColor = 'text-red-400'; trendIcon = '📉';
-            } else {
-                trend = 'stagnant'; trendLabel = 'Consistent'; trendColor = 'text-yellow-400'; trendIcon = '➡️';
-            }
+        const data = await databaseAPI.analyzeProgress(payload as any, user?.username);
+        setLoading(false);
+        setRan(true);
+        if (data) {
+            setResult(data);
+        } else {
+            setError('Could not reach the AI service. Check that OPENROUTER_API_KEY is set in your .env and the server is running.');
         }
-
-        // Score (0-100)
-        const score = Math.min(100, Math.round(
-            (activeDays / 7) * 30 +
-            (Math.min(last7Solved, 10) / 10) * 40 +
-            (hard * 3 + medium * 1.5) * 2
-        ));
-
-        // Suggestions based on data
-        const suggestions: AnalysisResult['suggestions'] = [];
-
-        if (activeDays < 4) {
-            suggestions.push({ icon: '📅', title: 'Build Consistency', desc: 'Aim for at least 5 active days per week' });
-        }
-        if (avgDuration < 30) {
-            suggestions.push({ icon: '⏱️', title: 'Increase Study Time', desc: 'Try 45–60 min focused sessions daily' });
-        }
-        if (hard === 0 && totalSolved > 10) {
-            suggestions.push({ icon: '💪', title: 'Challenge Yourself', desc: 'Attempt 1–2 Hard problems this week' });
-        }
-        if (medium === 0) {
-            suggestions.push({ icon: '🎯', title: 'Level Up', desc: 'Mix in Medium difficulty problems' });
-        }
-        if (suggestions.length < 2) {
-            suggestions.push({ icon: '🔁', title: 'Review Past Problems', desc: 'Revisit solved problems to reinforce patterns' });
-        }
-
-        // Prediction
-        const weeklyRate = last7Solved;
-        const predicted = weeklyRate * 4;
-        const prediction = weeklyRate > 0
-            ? `At your current pace, you'll solve ~${predicted} problems this month`
-            : 'Log some activity to get a performance prediction';
-
-        // Motivation
-        const motivations = [
-            `Keep going ${username || 'champ'}! Every problem solved is a step forward. 🔥`,
-            `You're building something great. Stay consistent! 💪`,
-            `Progress > Perfection. One problem at a time! 🚀`,
-            `The best coders were once beginners too. Keep pushing! ⚡`,
-            `Consistency beats intensity. Show up every day! 🎯`,
-        ];
-        const motivation = motivations[Math.floor(Math.random() * motivations.length)];
-
-        return {
-            trend, trendLabel, trendColor, trendIcon,
-            keyMetrics: [
-                { label: 'Problems Solved', value: totalSolved.toString(), icon: '✅', color: 'text-green-400' },
-                { label: 'Active Days (7d)', value: `${activeDays}/7`, icon: '📅', color: 'text-blue-400' },
-                { label: 'Avg Session', value: `${avgDuration}m`, icon: '⏱️', color: 'text-purple-400' },
-                { label: 'Total Hours', value: `${totalTime}h`, icon: '🕐', color: 'text-yellow-400' },
-                { label: 'This Week', value: last7Solved.toString(), icon: '📊', color: 'text-cyan-400' },
-                { label: 'Hard Solved', value: hard.toString(), icon: '🔥', color: 'text-red-400' },
-            ],
-            suggestions: suggestions.slice(0, 3),
-            prediction,
-            motivation,
-            score,
-        };
-    }, [activities, username]);
-
-    const scoreColor = analysis.score >= 70 ? 'text-green-400' : analysis.score >= 40 ? 'text-yellow-400' : 'text-red-400';
-    const scoreRing = analysis.score >= 70 ? 'stroke-green-400' : analysis.score >= 40 ? 'stroke-yellow-400' : 'stroke-red-400';
-    const circumference = 2 * Math.PI * 36;
-    const dashOffset = circumference - (analysis.score / 100) * circumference;
+    }, [activities, user]);
 
     return (
-        <div className="space-y-6 animate-fadeIn">
+        <div className="animate-fadeIn section-gap">
             {/* Header */}
-            <div className="flex items-center gap-3 mb-2">
-                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-yellow-500/20 to-amber-600/20 border border-yellow-500/30 flex items-center justify-center text-xl">🤖</div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
                 <div>
-                    <h2 className="text-xl font-bold text-white" style={{ fontFamily: '"Orbitron", sans-serif' }}>AI Progress Analysis</h2>
-                    <p className="text-gray-400 text-sm">Smart insights based on your activity data</p>
+                    <h2 className="page-heading" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <Brain size={22} color="#D4AF37" style={{ flexShrink: 0 }} />
+                        AI Progress Analysis
+                    </h2>
+                    <p className="page-subheading">OpenRouter-powered insights from your activity data</p>
                 </div>
+                <button
+                    onClick={runAnalysis}
+                    disabled={loading || activities.length === 0}
+                    className="btn-gold"
+                    style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 20px', fontSize: '0.875rem', opacity: activities.length === 0 ? 0.4 : 1 }}
+                >
+                    {loading
+                        ? <><div className="spinner-gold" style={{ width: '14px', height: '14px', borderWidth: '2px' }} /> Analyzing…</>
+                        : <><Sparkles size={14} /> {ran ? 'Re-analyze' : 'Analyze My Progress'}</>
+                    }
+                </button>
             </div>
 
-            {/* Top Row: Score + Trend */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-
-                {/* Performance Score */}
-                <div className="bg-gray-900/60 border border-white/5 rounded-2xl p-6 flex items-center gap-6">
-                    <div className="relative w-24 h-24 flex-shrink-0">
-                        <svg className="w-24 h-24 -rotate-90" viewBox="0 0 80 80">
-                            <circle cx="40" cy="40" r="36" fill="none" stroke="rgba(255,255,255,0.05)" strokeWidth="6" />
-                            <circle cx="40" cy="40" r="36" fill="none" className={scoreRing} strokeWidth="6"
-                                strokeDasharray={circumference} strokeDashoffset={dashOffset}
-                                strokeLinecap="round" style={{ transition: 'stroke-dashoffset 1s ease' }} />
-                        </svg>
-                        <div className="absolute inset-0 flex flex-col items-center justify-center">
-                            <span className={`text-2xl font-black ${scoreColor}`}>{analysis.score}</span>
-                            <span className="text-gray-500 text-[10px]">/ 100</span>
-                        </div>
-                    </div>
-                    <div>
-                        <p className="text-gray-400 text-sm mb-1">Performance Score</p>
-                        <p className={`text-2xl font-bold ${scoreColor}`}>
-                            {analysis.score >= 70 ? 'Excellent' : analysis.score >= 40 ? 'Good' : 'Needs Work'}
-                        </p>
-                        <p className="text-gray-500 text-xs mt-1">Based on last 7 days</p>
-                    </div>
+            {/* Empty state */}
+            {activities.length === 0 && (
+                <div className="card-dark" style={{ padding: '48px 24px', textAlign: 'center' }}>
+                    <div style={{ fontSize: '2.5rem', marginBottom: '12px', opacity: 0.15 }}>◈</div>
+                    <p style={{ color: '#555', fontSize: '0.9rem' }}>Log some activities first to enable AI analysis.</p>
                 </div>
+            )}
 
-                {/* Trend */}
-                <div className="bg-gray-900/60 border border-white/5 rounded-2xl p-6 flex items-center gap-4">
-                    <div className="text-5xl">{analysis.trendIcon}</div>
-                    <div>
-                        <p className="text-gray-400 text-sm mb-1">Current Trend</p>
-                        <p className={`text-2xl font-bold ${analysis.trendColor}`}>{analysis.trendLabel}</p>
-                        <p className="text-gray-500 text-xs mt-1">vs previous 7 days</p>
-                    </div>
-                </div>
-            </div>
-
-            {/* Key Metrics */}
-            <div className="bg-gray-900/60 border border-white/5 rounded-2xl p-6">
-                <h3 className="text-white font-semibold mb-4 flex items-center gap-2">
-                    <span>📊</span> Key Metrics
-                </h3>
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-                    {analysis.keyMetrics.map((m, i) => (
-                        <div key={i} className="bg-black/30 rounded-xl p-3 border border-white/5">
-                            <div className="flex items-center gap-2 mb-1">
-                                <span className="text-lg">{m.icon}</span>
-                                <span className="text-gray-400 text-xs">{m.label}</span>
+            {/* Local snapshot — always visible once there's data */}
+            {activities.length > 0 && (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '12px' }}>
+                    {/* Quick stats */}
+                    {[
+                        { label: 'Total Solved', value: activities.filter(a => a.problemSolved).length, color: '#22c55e', icon: '✓' },
+                        { label: 'Topics Covered', value: new Set(activities.map(a => a.dsaTopic || a.category)).size, color: '#818cf8', icon: '◎' },
+                        { label: 'Hard Solved', value: activities.filter(a => a.difficulty === 'Hard' && a.problemSolved).length, color: '#ef4444', icon: '🔥' },
+                        { label: 'Active Days', value: new Set(activities.map(a => a.date.slice(0, 10))).size, color: '#D4AF37', icon: '◆' },
+                    ].map((s, i) => (
+                        <div key={i} className="stat-card" style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                            <div style={{ width: '40px', height: '40px', borderRadius: '10px', background: `${s.color}18`, border: `1px solid ${s.color}30`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1rem', flexShrink: 0 }}>
+                                {s.icon}
                             </div>
-                            <p className={`text-xl font-bold ${m.color}`}>{m.value}</p>
-                        </div>
-                    ))}
-                </div>
-            </div>
-
-            {/* Suggestions */}
-            <div className="bg-gray-900/60 border border-white/5 rounded-2xl p-6">
-                <h3 className="text-white font-semibold mb-4 flex items-center gap-2">
-                    <span>💡</span> Actionable Suggestions
-                </h3>
-                <div className="space-y-3">
-                    {analysis.suggestions.map((s, i) => (
-                        <div key={i} className="flex items-start gap-3 bg-black/30 rounded-xl p-4 border border-yellow-500/10 hover:border-yellow-500/30 transition-colors duration-300">
-                            <span className="text-2xl mt-0.5">{s.icon}</span>
                             <div>
-                                <p className="text-white font-semibold text-sm">{s.title}</p>
-                                <p className="text-gray-400 text-xs mt-0.5">{s.desc}</p>
+                                <div className="kpi-number" style={{ color: s.color, fontSize: '1.5rem' }}>{s.value}</div>
+                                <div className="kpi-sub">{s.label}</div>
                             </div>
                         </div>
                     ))}
                 </div>
-            </div>
+            )}
 
-            {/* Prediction + Motivation */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="bg-gray-900/60 border border-blue-500/20 rounded-2xl p-5">
-                    <h3 className="text-white font-semibold mb-2 flex items-center gap-2 text-sm">
-                        <span>🔮</span> Prediction
-                    </h3>
-                    <p className="text-blue-300 text-sm leading-relaxed">{analysis.prediction}</p>
+            {/* Error */}
+            {error && (
+                <div className="card-dark" style={{ padding: '16px 20px', borderColor: 'rgba(239,68,68,0.3)', display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
+                    <AlertTriangle size={16} color="#ef4444" style={{ flexShrink: 0, marginTop: '2px' }} />
+                    <p style={{ color: '#ef4444', fontSize: '0.875rem', margin: 0 }}>{error}</p>
                 </div>
-                <div className="bg-gradient-to-br from-yellow-900/30 to-amber-900/20 border border-yellow-500/20 rounded-2xl p-5">
-                    <h3 className="text-white font-semibold mb-2 flex items-center gap-2 text-sm">
-                        <span>⚡</span> Motivation
-                    </h3>
-                    <p className="text-yellow-200 text-sm leading-relaxed italic">{analysis.motivation}</p>
+            )}
+
+            {/* Loading skeleton */}
+            {loading && (
+                <div className="section-gap">
+                    {[240, 180, 200].map((h, i) => (
+                        <div key={i} className="skeleton" style={{ height: `${h}px`, borderRadius: '14px' }} />
+                    ))}
                 </div>
-            </div>
+            )}
+
+            {/* AI Result */}
+            <AnimatePresence>
+                {result && !loading && (
+                    <motion.div
+                        initial={{ opacity: 0, y: 16 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.4, ease: [0.4, 0, 0.2, 1] }}
+                        className="section-gap"
+                    >
+                        {/* Overall assessment */}
+                        <div className="card-dark" style={{ padding: '20px 24px', borderColor: 'rgba(212,175,55,0.3)' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px' }}>
+                                <Sparkles size={14} color="#D4AF37" />
+                                <span className="card-title">Overall Assessment</span>
+                            </div>
+                            <p style={{ color: '#EAEAEA', fontSize: '0.9rem', lineHeight: 1.7, margin: 0 }}>{result.overallAssessment}</p>
+                            {result.nextMilestone && (
+                                <div style={{ marginTop: '12px', padding: '10px 14px', borderRadius: '10px', background: 'rgba(212,175,55,0.06)', border: '1px solid rgba(212,175,55,0.15)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                    <Target size={13} color="#D4AF37" style={{ flexShrink: 0 }} />
+                                    <span style={{ fontSize: '0.82rem', color: '#D4AF37', fontWeight: 600 }}>Next milestone: </span>
+                                    <span style={{ fontSize: '0.82rem', color: '#EAEAEA' }}>{result.nextMilestone}</span>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Strengths + Weaknesses */}
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '12px' }}>
+                            {/* Strengths */}
+                            <div className="card-dark" style={{ padding: '20px 24px' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '14px' }}>
+                                    <TrendingUp size={14} color="#22c55e" />
+                                    <span className="card-title" style={{ color: '#22c55e' }}>Strengths</span>
+                                </div>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                    {result.strengths.map((s, i) => (
+                                        <motion.div key={i}
+                                            initial={{ opacity: 0, x: -8 }}
+                                            animate={{ opacity: 1, x: 0 }}
+                                            transition={{ delay: i * 0.07 }}
+                                            style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', padding: '9px 12px', borderRadius: '9px', background: 'rgba(34,197,94,0.05)', border: '1px solid rgba(34,197,94,0.12)' }}
+                                        >
+                                            <ChevronRight size={13} color="#22c55e" style={{ flexShrink: 0, marginTop: '2px' }} />
+                                            <span style={{ fontSize: '0.84rem', color: '#EAEAEA', lineHeight: 1.5 }}>{s}</span>
+                                        </motion.div>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* Weaknesses */}
+                            <div className="card-dark" style={{ padding: '20px 24px' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '14px' }}>
+                                    <AlertTriangle size={14} color="#f59e0b" />
+                                    <span className="card-title" style={{ color: '#f59e0b' }}>Areas to Improve</span>
+                                </div>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                    {result.weaknesses.map((w, i) => (
+                                        <motion.div key={i}
+                                            initial={{ opacity: 0, x: -8 }}
+                                            animate={{ opacity: 1, x: 0 }}
+                                            transition={{ delay: i * 0.07 }}
+                                            style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', padding: '9px 12px', borderRadius: '9px', background: 'rgba(245,158,11,0.05)', border: '1px solid rgba(245,158,11,0.12)' }}
+                                        >
+                                            <ChevronRight size={13} color="#f59e0b" style={{ flexShrink: 0, marginTop: '2px' }} />
+                                            <span style={{ fontSize: '0.84rem', color: '#EAEAEA', lineHeight: 1.5 }}>{w}</span>
+                                        </motion.div>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Suggestions */}
+                        <div className="card-dark" style={{ padding: '20px 24px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
+                                <Lightbulb size={14} color="#D4AF37" />
+                                <span className="card-title">Recommended Next Steps</span>
+                            </div>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                                {result.suggestions.map((s, i) => {
+                                    const meta = PRIORITY_META[s.priority] ?? PRIORITY_META.Medium;
+                                    return (
+                                        <motion.div key={i}
+                                            initial={{ opacity: 0, y: 8 }}
+                                            animate={{ opacity: 1, y: 0 }}
+                                            transition={{ delay: i * 0.08 }}
+                                            style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', padding: '12px 16px', borderRadius: '11px', background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)', transition: 'border-color 0.2s' }}
+                                            onMouseEnter={e => (e.currentTarget as HTMLElement).style.borderColor = 'rgba(212,175,55,0.2)'}
+                                            onMouseLeave={e => (e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,255,255,0.05)'}
+                                        >
+                                            <div style={{ width: '28px', height: '28px', borderRadius: '8px', background: meta.bg, border: `1px solid ${meta.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: '0.75rem', fontWeight: 700, color: meta.color }}>
+                                                {i + 1}
+                                            </div>
+                                            <div style={{ flex: 1, minWidth: 0 }}>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', marginBottom: '4px' }}>
+                                                    <span style={{ fontSize: '0.875rem', fontWeight: 600, color: '#EAEAEA' }}>{s.topic}</span>
+                                                    <span style={{ fontSize: '0.65rem', padding: '1px 8px', borderRadius: '999px', fontWeight: 700, color: meta.color, background: meta.bg, border: `1px solid ${meta.border}` }}>
+                                                        {meta.label}
+                                                    </span>
+                                                </div>
+                                                <p style={{ fontSize: '0.82rem', color: '#777', margin: 0, lineHeight: 1.5 }}>{s.reason}</p>
+                                            </div>
+                                        </motion.div>
+                                    );
+                                })}
+                            </div>
+                        </div>
+
+                        {/* Next Problems */}
+                        {result.nextProblems?.length > 0 && (
+                            <div className="card-dark" style={{ padding: '20px 24px' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
+                                    <Target size={14} color="#818cf8" />
+                                    <span className="card-title" style={{ color: '#818cf8' }}>Recommended Problems</span>
+                                    <span style={{ fontSize: '0.65rem', color: '#555', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)', padding: '1px 8px', borderRadius: '999px' }}>
+                                        AI-picked
+                                    </span>
+                                </div>
+                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: '10px' }}>
+                                    {result.nextProblems.map((p, i) => {
+                                        const diffColor = p.difficulty === 'Easy' ? '#22c55e' : p.difficulty === 'Hard' ? '#ef4444' : '#f59e0b';
+                                        const diffBg = p.difficulty === 'Easy' ? 'rgba(34,197,94,0.1)' : p.difficulty === 'Hard' ? 'rgba(239,68,68,0.1)' : 'rgba(245,158,11,0.1)';
+                                        const leetUrl = `https://leetcode.com/problems/${p.name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}/`;
+                                        return (
+                                            <motion.a
+                                                key={i}
+                                                href={leetUrl}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                initial={{ opacity: 0, y: 8 }}
+                                                animate={{ opacity: 1, y: 0 }}
+                                                transition={{ delay: i * 0.07 }}
+                                                style={{
+                                                    display: 'block', padding: '14px 16px', borderRadius: '12px', textDecoration: 'none',
+                                                    background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)',
+                                                    transition: 'border-color 0.2s, transform 0.2s', position: 'relative', overflow: 'hidden',
+                                                }}
+                                                whileHover={{ y: -2 }}
+                                                onMouseEnter={e => (e.currentTarget as HTMLElement).style.borderColor = `${diffColor}40`}
+                                                onMouseLeave={e => (e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,255,255,0.06)'}
+                                            >
+                                                {/* top edge glow */}
+                                                <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '1px', background: `linear-gradient(90deg, transparent, ${diffColor}50, transparent)` }} />
+                                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
+                                                    <span style={{ fontSize: '0.875rem', fontWeight: 600, color: '#EAEAEA', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '160px' }}>{p.name}</span>
+                                                    <span style={{ fontSize: '0.62rem', padding: '2px 8px', borderRadius: '999px', fontWeight: 700, color: diffColor, background: diffBg, border: `1px solid ${diffColor}30`, flexShrink: 0 }}>
+                                                        {p.difficulty}
+                                                    </span>
+                                                </div>
+                                                <div style={{ fontSize: '0.72rem', color: '#818cf8', marginBottom: '5px', fontWeight: 600 }}>{p.topic}</div>
+                                                <div style={{ fontSize: '0.75rem', color: '#666', lineHeight: 1.4 }}>{p.reason}</div>
+                                            </motion.a>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Re-analyze footer */}
+                        <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                            <button onClick={runAnalysis} style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'none', border: 'none', cursor: 'pointer', color: '#555', fontSize: '0.78rem', padding: '4px 8px', borderRadius: '6px', transition: 'color 0.2s' }}
+                                onMouseEnter={e => (e.currentTarget as HTMLElement).style.color = '#D4AF37'}
+                                onMouseLeave={e => (e.currentTarget as HTMLElement).style.color = '#555'}
+                            >
+                                <RefreshCw size={12} /> Refresh analysis
+                            </button>
+                        </div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+
+            {/* Pre-run hint */}
+            {!ran && !loading && activities.length > 0 && (
+                <div className="card-dark" style={{ padding: '32px 24px', textAlign: 'center', borderStyle: 'dashed' }}>
+                    <Brain size={28} color="#333" style={{ margin: '0 auto 12px' }} />
+                    <p style={{ color: '#555', fontSize: '0.9rem', marginBottom: '6px' }}>Click "Analyze My Progress" to get AI-powered insights via OpenRouter</p>
+                    <p className="kpi-sub">Strengths, weaknesses, and a personalized study plan based on your {activities.length} logged sessions</p>
+                </div>
+            )}
         </div>
     );
 };
