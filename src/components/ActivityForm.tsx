@@ -3,7 +3,7 @@ import { Activity } from '../types';
 import { useToast } from './Toast';
 
 interface ActivityFormProps {
-  onAddActivity: (activity: Omit<Activity, 'id' | 'date'>) => void;
+  onAddActivity: (activity: Omit<Activity, 'id' | 'date'>) => Promise<boolean>;
 }
 
 const DSA_CATEGORIES = [
@@ -63,14 +63,17 @@ const ActivityForm: React.FC<ActivityFormProps> = ({ onAddActivity }) => {
     setProblemSolved(false); setTimeComplexity(''); setSpaceComplexity(''); setNotes('');
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const [saving, setSaving] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const finalCategory = category === 'Other' ? customCategory : category;
     if (!finalCategory || !duration || !description) {
       toast('Please fill in all required fields', 'error');
       return;
     }
-    onAddActivity({
+    setSaving(true);
+    const ok = await onAddActivity({
       category: finalCategory,
       duration: parseInt(duration, 10),
       description,
@@ -83,9 +86,12 @@ const ActivityForm: React.FC<ActivityFormProps> = ({ onAddActivity }) => {
       spaceComplexity: spaceComplexity || undefined,
       notes: notes || undefined,
     });
-    toast(problemSolved ? '🎉 Problem solved! Great work!' : '📝 Activity logged', 'success');
-    reset();
-    setOpen(false);
+    setSaving(false);
+    if (ok) {
+      toast(problemSolved ? '🎉 Problem solved! Great work!' : '📝 Activity logged', 'success');
+      reset();
+      setOpen(false);
+    }
   };
 
   return (
@@ -215,8 +221,8 @@ const ActivityForm: React.FC<ActivityFormProps> = ({ onAddActivity }) => {
             </div>
           </div>
 
-          <button type="submit" className="btn-gold" style={{ padding: '12px', fontSize: '0.9rem', width: '100%' }}>
-            📝 Log Activity
+          <button type="submit" disabled={saving} className="btn-gold" style={{ padding: '12px', fontSize: '0.9rem', width: '100%', opacity: saving ? 0.5 : 1, cursor: saving ? 'not-allowed' : 'pointer' }}>
+            {saving ? 'Saving…' : '📝 Log Activity'}
           </button>
         </form>
       )}
