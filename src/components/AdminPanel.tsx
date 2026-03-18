@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { databaseAPI } from '../api/database';
 import { useToast } from './Toast';
-import { User, Activity, AdminLog } from '../../../shared/schema';
+import { User, Activity, AdminLog } from '../../shared/schema';
 
 type SafeUser = Omit<User, 'password'>;
 
