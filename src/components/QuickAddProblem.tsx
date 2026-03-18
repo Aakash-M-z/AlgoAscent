@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { Activity } from '../types';
+import { useToast } from './Toast';
 
 interface QuickAddProblemProps {
-  onAddActivity: (activity: Omit<Activity, 'id' | 'date'>) => void;
+  onAdd: (activity: Activity) => void;
 }
 
 const POPULAR_PROBLEMS = [
@@ -11,16 +12,26 @@ const POPULAR_PROBLEMS = [
   { name: 'Merge Two Sorted Lists', difficulty: 'Easy', platform: 'LeetCode', category: 'Linked Lists' },
   { name: 'Maximum Subarray', difficulty: 'Medium', platform: 'LeetCode', category: 'Dynamic Programming' },
   { name: 'Climbing Stairs', difficulty: 'Easy', platform: 'LeetCode', category: 'Dynamic Programming' },
-  { name: 'Best Time to Buy and Sell Stock', difficulty: 'Easy', platform: 'LeetCode', category: 'Greedy Algorithms' },
+  { name: 'Best Time to Buy and Sell Stock', difficulty: 'Easy', platform: 'LeetCode', category: 'Arrays & Strings' },
+  { name: 'Binary Search', difficulty: 'Easy', platform: 'LeetCode', category: 'Binary Search' },
+  { name: 'Reverse Linked List', difficulty: 'Easy', platform: 'LeetCode', category: 'Linked Lists' },
 ];
 
-const QuickAddProblem: React.FC<QuickAddProblemProps> = ({ onAddActivity }) => {
-  const [selectedProblem, setSelectedProblem] = useState<string>('');
-  const [timeSpent, setTimeSpent] = useState<number>(15);
-  const [solved, setSolved] = useState<boolean>(false);
+const diffColor = (d: string) => {
+  if (d === 'Easy') return { color: '#22c55e', bg: 'rgba(34,197,94,0.1)' };
+  if (d === 'Medium') return { color: '#f59e0b', bg: 'rgba(245,158,11,0.1)' };
+  return { color: '#ef4444', bg: 'rgba(239,68,68,0.1)' };
+};
+
+const QuickAddProblem: React.FC<QuickAddProblemProps> = ({ onAdd }) => {
+  const { toast } = useToast();
+  const [timeSpent, setTimeSpent] = useState(15);
+  const [solved, setSolved] = useState(false);
 
   const handleQuickAdd = (problem: typeof POPULAR_PROBLEMS[0]) => {
-    const newActivity: Omit<Activity, 'id' | 'date'> = {
+    const activity: Activity = {
+      id: Date.now().toString(),
+      date: new Date().toISOString(),
       category: problem.category,
       duration: timeSpent,
       description: `Worked on ${problem.name}`,
@@ -30,92 +41,75 @@ const QuickAddProblem: React.FC<QuickAddProblemProps> = ({ onAddActivity }) => {
       platform: problem.platform,
       problemSolved: solved,
     };
-
-    onAddActivity(newActivity);
-
-    // Show success animation
-    const successDiv = document.createElement('div');
-    successDiv.className = 'fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-gradient-to-r from-green-400 to-emerald-500 text-white px-8 py-4 rounded-2xl shadow-2xl z-50 animate-bounce';
-    successDiv.innerHTML = `
-      <div class="text-center">
-        <div class="text-4xl mb-2">${solved ? '🎉' : '📚'}</div>
-        <div class="font-bold text-lg">${solved ? 'Problem Solved!' : 'Progress Logged!'}</div>
-        <div class="text-sm opacity-90">+${solved ? 15 : 10} points earned</div>
-      </div>
-    `;
-    document.body.appendChild(successDiv);
-
-    setTimeout(() => {
-      successDiv.style.transform = 'translate(-50%, -50%) scale(0)';
-      setTimeout(() => document.body.removeChild(successDiv), 300);
-    }, 2000);
+    onAdd(activity);
+    toast(solved ? `✓ Solved: ${problem.name}` : `📚 Logged: ${problem.name}`, 'success');
   };
 
   return (
-    <div className="bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-2xl p-6 border border-blue-200 dark:border-blue-700">
-      <h3 className="text-lg font-bold text-gray-800 dark:text-white flex items-center gap-2 mb-4">
-        <span className="text-xl">⚡</span>
-        Quick Add Popular Problems
-      </h3>
+    <div className="card-dark" style={{ padding: '20px 24px' }}>
+      <div className="card-title" style={{ marginBottom: '16px' }}>⚡ Quick Add Problem</div>
 
-      <div className="space-y-4">
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Time Spent (min)
-            </label>
-            <input
-              type="number"
-              value={timeSpent}
-              onChange={(e) => setTimeSpent(Number(e.target.value))}
-              min="5"
-              max="300"
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white text-sm"
-            />
-          </div>
-          <div className="flex items-end">
-            <label className="flex items-center space-x-2 mb-2">
-              <input
-                type="checkbox"
-                checked={solved}
-                onChange={(e) => setSolved(e.target.checked)}
-                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-              />
-              <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Solved</span>
-            </label>
-          </div>
+      <div style={{ display: 'flex', gap: '16px', marginBottom: '16px', flexWrap: 'wrap', alignItems: 'flex-end' }}>
+        <div>
+          <div className="kpi-sub" style={{ marginBottom: '6px' }}>Time spent (min)</div>
+          <input
+            type="number"
+            value={timeSpent}
+            onChange={e => setTimeSpent(Number(e.target.value))}
+            min={5} max={300}
+            style={{
+              width: '90px', padding: '8px 12px', borderRadius: '8px',
+              background: '#1A1A1A', border: '1px solid rgba(255,255,255,0.08)',
+              color: '#EAEAEA', fontSize: '0.875rem', outline: 'none',
+            }}
+          />
         </div>
+        <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', paddingBottom: '2px' }}>
+          <input
+            type="checkbox"
+            checked={solved}
+            onChange={e => setSolved(e.target.checked)}
+            style={{ accentColor: '#D4AF37', width: '15px', height: '15px' }}
+          />
+          <span style={{ fontSize: '0.875rem', color: '#EAEAEA' }}>Solved</span>
+        </label>
+      </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-64 overflow-y-auto">
-          {POPULAR_PROBLEMS.map((problem, index) => (
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '8px' }}>
+        {POPULAR_PROBLEMS.map((p, i) => {
+          const dc = diffColor(p.difficulty);
+          return (
             <button
-              key={index}
-              onClick={() => handleQuickAdd(problem)}
-              className="p-3 text-left bg-white dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600 hover:bg-blue-50 dark:hover:bg-gray-600 transition-all duration-200 hover:scale-105 hover:shadow-md"
+              key={i}
+              onClick={() => handleQuickAdd(p)}
+              style={{
+                padding: '10px 14px', textAlign: 'left', borderRadius: '10px',
+                background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)',
+                cursor: 'pointer', transition: 'all 0.2s',
+              }}
+              onMouseEnter={e => {
+                (e.currentTarget as HTMLElement).style.background = 'rgba(212,175,55,0.06)';
+                (e.currentTarget as HTMLElement).style.borderColor = 'rgba(212,175,55,0.25)';
+              }}
+              onMouseLeave={e => {
+                (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.02)';
+                (e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,255,255,0.06)';
+              }}
             >
-              <div className="font-medium text-gray-800 dark:text-white text-sm mb-1">
-                {problem.name}
-              </div>
-              <div className="flex items-center justify-between text-xs">
-                <span className={`px-2 py-1 rounded text-xs font-medium ${problem.difficulty === 'Easy'
-                  ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
-                  : problem.difficulty === 'Medium'
-                    ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400'
-                    : 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400'
-                  }`}>
-                  {problem.difficulty}
+              <div style={{ fontSize: '0.8rem', fontWeight: 600, color: '#EAEAEA', marginBottom: '6px' }}>{p.name}</div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ fontSize: '0.65rem', padding: '2px 7px', borderRadius: '999px', fontWeight: 600, color: dc.color, background: dc.bg }}>
+                  {p.difficulty}
                 </span>
-                <span className="text-gray-500 dark:text-gray-400">
-                  {problem.platform}
-                </span>
+                <span className="kpi-sub" style={{ fontSize: '0.65rem' }}>{p.platform}</span>
               </div>
             </button>
-          ))}
-        </div>
+          );
+        })}
+      </div>
 
-        <div className="text-xs text-gray-500 dark:text-gray-400 text-center">
-          💡 Click any problem to quickly log your practice session
-        </div>
+      <div className="kpi-sub" style={{ marginTop: '12px', textAlign: 'center' }}>
+        Click any problem to log your session
       </div>
     </div>
   );
