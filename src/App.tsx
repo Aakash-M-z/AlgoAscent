@@ -29,10 +29,13 @@ import QuickAddProblem from './components/QuickAddProblem';
 import DailyMotivation from './components/DailyMotivation';
 import UserProfile from './components/UserProfile';
 import AIAssistant from './components/AIAssistant';
+import AIAnalysis from './components/AIAnalysis';
+import RecommendationEngine from './components/RecommendationEngine';
 import TaskManager from './components/TaskManager';
 import AnalyticsDashboard from './components/AnalyticsDashboard';
 import ErrorBoundary from './components/ErrorBoundary';
 import IntroScreen from './components/IntroScreen';
+import StatsCards from './components/StatsCards';
 
 const NAV_ITEMS = [
     { id: 'overview', label: 'Overview', icon: '⊞', section: 'main' },
@@ -65,49 +68,56 @@ const Sidebar: React.FC<{
         <aside
             className="sidebar hidden md:flex flex-col"
             style={{
-                width: collapsed ? '60px' : '216px',
+                width: collapsed ? '58px' : '212px',
                 flexShrink: 0,
-                transition: 'width 0.25s cubic-bezier(0.4,0,0.2,1)',
+                transition: 'width 0.28s cubic-bezier(0.4,0,0.2,1)',
                 overflow: 'hidden',
                 height: '100%',
                 alignSelf: 'stretch',
             }}
         >
-            <div style={{ padding: '12px', display: 'flex', justifyContent: collapsed ? 'center' : 'flex-end' }}>
+            <div style={{ padding: '10px 8px', display: 'flex', justifyContent: collapsed ? 'center' : 'flex-end' }}>
                 <button onClick={onToggle}
-                    style={{ width: '28px', height: '28px', borderRadius: '7px', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)', color: '#555', cursor: 'pointer', fontSize: '0.7rem', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.2s ease' }}
-                    onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = '#D4AF37'; (e.currentTarget as HTMLElement).style.borderColor = 'rgba(212,175,55,0.3)'; }}
-                    onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = '#555'; (e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,255,255,0.07)'; }}
+                    style={{
+                        width: '26px', height: '26px', borderRadius: '7px',
+                        background: 'rgba(255,255,255,0.03)',
+                        border: '1px solid rgba(255,255,255,0.06)',
+                        color: '#444', cursor: 'pointer', fontSize: '0.65rem',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        transition: 'all 0.2s ease',
+                    }}
+                    onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = '#D4AF37'; (e.currentTarget as HTMLElement).style.borderColor = 'rgba(212,175,55,0.3)'; (e.currentTarget as HTMLElement).style.background = 'rgba(212,175,55,0.06)'; }}
+                    onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = '#444'; (e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,255,255,0.06)'; (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.03)'; }}
                 >{collapsed ? '▶' : '◀'}</button>
             </div>
-            <nav style={{ flex: 1, padding: '0 8px', overflowY: 'auto', overflowX: 'hidden' }}>
+            <nav style={{ flex: 1, padding: '0 6px', overflowY: 'auto', overflowX: 'hidden' }}>
                 {sections.map(sec => {
                     const items = tabs.filter(t => t.section === sec.key);
                     if (!items.length) return null;
                     return (
-                        <div key={sec.key} style={{ marginBottom: '4px' }}>
+                        <div key={sec.key} style={{ marginBottom: '2px' }}>
                             {!collapsed && (
-                                <div className="section-label" style={{ padding: '10px 10px 4px' }}>
+                                <div className="section-label" style={{ padding: '12px 10px 5px' }}>
                                     {sec.label}
                                 </div>
                             )}
                             {items.map(tab => (
                                 <button key={tab.id} onClick={() => onTabChange(tab.id)} title={collapsed ? tab.label : undefined}
-                                    className={`sidebar-item w-full ${activeTab === tab.id ? 'active' : ''}`}
-                                    style={{ justifyContent: collapsed ? 'center' : 'flex-start', padding: collapsed ? '10px' : '9px 12px' }}
+                                    className={`sidebar-item ${activeTab === tab.id ? 'active' : ''}`}
+                                    style={{ justifyContent: collapsed ? 'center' : 'flex-start', padding: collapsed ? '10px' : '9px 12px', marginBottom: '1px' }}
                                 >
-                                    <span style={{ fontSize: '0.95rem', flexShrink: 0, lineHeight: 1 }}>{tab.icon}</span>
-                                    {!collapsed && <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontSize: '0.85rem' }}>{tab.label}</span>}
+                                    <span style={{ fontSize: '0.9rem', flexShrink: 0, lineHeight: 1, opacity: activeTab === tab.id ? 1 : 0.7 }}>{tab.icon}</span>
+                                    {!collapsed && <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontSize: '0.84rem' }}>{tab.label}</span>}
                                 </button>
                             ))}
-                            {!collapsed && <div style={{ height: '1px', background: 'rgba(255,255,255,0.03)', margin: '6px 4px' }} />}
+                            {!collapsed && <div style={{ height: '1px', background: 'rgba(255,255,255,0.03)', margin: '8px 4px' }} />}
                         </div>
                     );
                 })}
             </nav>
             {!collapsed && (
-                <div style={{ padding: '12px 16px', borderTop: '1px solid rgba(212,175,55,0.08)' }}>
-                    <div className="section-label">Progress Tracker v2</div>
+                <div style={{ padding: '12px 14px', borderTop: '1px solid rgba(212,175,55,0.07)' }}>
+                    <div className="section-label" style={{ color: 'rgba(212,175,55,0.25)' }}>Progress Tracker v2</div>
                 </div>
             )}
         </aside>
@@ -121,45 +131,11 @@ const OverviewTab: React.FC<{
     onAddActivity: (a: Activity) => void;
     onDeleteActivity: (id: string) => void;
 }> = ({ activities, loading, onAddActivity, onDeleteActivity }) => {
-    const stats = useMemo(() => {
-        const total = activities.length;
-        const solved = activities.filter(a => a.problemSolved).length;
-        const totalMins = activities.reduce((s, a) => s + a.duration, 0);
-        const streak = (() => {
-            const days = new Set(activities.map(a => a.date.slice(0, 10)));
-            let count = 0;
-            const d = new Date();
-            while (days.has(d.toISOString().slice(0, 10))) {
-                count++;
-                d.setDate(d.getDate() - 1);
-            }
-            return count;
-        })();
-        return { total, solved, totalMins, streak };
-    }, [activities]);
-
-    const kpis = [
-        { label: 'Total Sessions', value: stats.total, icon: '▦', sub: 'all time' },
-        { label: 'Problems Solved', value: stats.solved, icon: '✓', sub: 'logged' },
-        { label: 'Hours Studied', value: Math.round(stats.totalMins / 60), icon: '◐', sub: 'total' },
-        { label: 'Day Streak', value: stats.streak, icon: '🔥', sub: 'current' },
-    ];
 
     return (
         <div className="section-gap">
-            {/* KPI row */}
-            {loading ? <SkeletonStatRow /> : (
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '12px' }}>
-                    {kpis.map(k => (
-                        <div key={k.label} className="stat-card" style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                            <div style={{ fontSize: '1.4rem', lineHeight: 1 }}>{k.icon}</div>
-                            <div className="kpi-number">{k.value}</div>
-                            <div className="kpi-label">{k.label}</div>
-                            <div className="kpi-sub">{k.sub}</div>
-                        </div>
-                    ))}
-                </div>
-            )}
+            {/* KPI cards */}
+            {loading ? <SkeletonStatRow /> : <StatsCards activities={activities} />}
 
             {/* Daily motivation + streak */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: '12px', alignItems: 'start' }}>
@@ -229,17 +205,40 @@ const OverviewTab: React.FC<{
             )}
 
             {/* Activity form */}
-            <ActivityForm onAddActivity={(partial) => {
+            <ActivityForm onAddActivity={async (partial) => {
                 const activity: Activity = {
                     ...partial,
                     id: Date.now().toString(),
                     date: new Date().toISOString().split('T')[0],
                 };
-                onAddActivity(activity);
+                return onAddActivity(activity);
             }} />
 
             {/* Notifications */}
             <DailyProblemNotification />
+        </div>
+    );
+};
+
+/* ── AI Tab (chat + analysis + recommendations sub-tabs) ─────── */
+const AITab: React.FC<{ activities: Activity[] }> = ({ activities }) => {
+    const [sub, setSub] = useState<'chat' | 'analysis' | 'recommendations'>('chat');
+    return (
+        <div className="section-gap">
+            <div className="tab-nav" style={{ width: 'fit-content' }}>
+                {([
+                    ['chat', '◈ Chat'],
+                    ['analysis', '◐ Analysis'],
+                    ['recommendations', '◆ Recommendations'],
+                ] as const).map(([id, label]) => (
+                    <button key={id} onClick={() => setSub(id)} className={`tab-item ${sub === id ? 'active' : ''}`}>
+                        {label}
+                    </button>
+                ))}
+            </div>
+            {sub === 'chat' && <AIAssistant activities={activities} />}
+            {sub === 'analysis' && <AIAnalysis activities={activities} />}
+            {sub === 'recommendations' && <RecommendationEngine activities={activities} />}
         </div>
     );
 };
@@ -274,17 +273,18 @@ const AppContent: React.FC = () => {
             .finally(() => setDataLoading(false));
     }, [isAuthenticated, user]);
 
-    const handleAddActivity = useCallback(async (activity: Activity) => {
+    const handleAddActivity = useCallback(async (activity: Activity): Promise<boolean> => {
         try {
             const saved = await databaseAPI.createActivity(frontendToDbActivity(activity, user!.id));
             if (saved) {
                 setActivities(prev => [dbToFrontendActivity(saved), ...prev]);
-                toast('Activity added', 'success');
-            } else {
-                toast('Failed to save activity', 'error');
+                return true;
             }
+            toast('Failed to save activity', 'error');
+            return false;
         } catch {
             toast('Failed to save activity', 'error');
+            return false;
         }
     }, [toast, user]);
 
@@ -346,7 +346,7 @@ const AppContent: React.FC = () => {
                 case 'analytics':
                     return <AnalyticsDashboard activities={activities} />;
                 case 'ai':
-                    return <AIAssistant activities={activities} />;
+                    return <AITab activities={activities} />;
                 case 'roadmap':
                     return <DSARoadmap activities={activities} onAddActivity={handleAddActivity} />;
                 case 'stats':
@@ -369,7 +369,7 @@ const AppContent: React.FC = () => {
     return (
         <>
             {/* ── Desktop layout: locked to 100vh, only content column scrolls ── */}
-            <div className="hidden md:flex" style={{ height: '100vh', background: '#0B0B0B', flexDirection: 'column', overflow: 'hidden' }}>
+            <div className="hidden md:flex" style={{ height: '100vh', background: '#080808', flexDirection: 'column', overflow: 'hidden' }}>
                 {showOnboarding && <Onboarding onComplete={() => setShowOnboarding(false)} />}
                 <Header onNavigate={setActiveTab} />
                 <div style={{ display: 'flex', flex: 1, minHeight: 0, overflow: 'hidden' }}>
@@ -380,8 +380,8 @@ const AppContent: React.FC = () => {
                         collapsed={sidebarCollapsed}
                         onToggle={() => setSidebarCollapsed(c => !c)}
                     />
-                    <div style={{ flex: 1, minWidth: 0, overflowY: 'auto', overflowX: 'hidden' }}>
-                        <main style={{ maxWidth: '1100px', margin: '0 auto', padding: '28px 24px 48px', width: '100%', boxSizing: 'border-box' }}>
+                    <div style={{ flex: 1, minWidth: 0, overflowY: 'auto', overflowX: 'hidden', background: 'radial-gradient(ellipse 80% 50% at 50% -10%, rgba(212,175,55,0.04) 0%, transparent 70%)' }}>
+                        <main style={{ maxWidth: '1100px', margin: '0 auto', padding: '28px 24px 56px', width: '100%', boxSizing: 'border-box' }}>
                             <ErrorBoundary>{renderTab()}</ErrorBoundary>
                         </main>
                     </div>
@@ -389,7 +389,7 @@ const AppContent: React.FC = () => {
             </div>
 
             {/* ── Mobile layout: normal page scroll, bottom nav fixed ── */}
-            <div className="flex flex-col md:hidden" style={{ minHeight: '100vh', background: '#0B0B0B' }}>
+            <div className="flex flex-col md:hidden" style={{ minHeight: '100vh', background: '#080808' }}>
                 {showOnboarding && <Onboarding onComplete={() => setShowOnboarding(false)} />}
                 <Header onNavigate={setActiveTab} />
                 <main style={{ flex: 1, padding: '20px 16px 80px', boxSizing: 'border-box' }}>

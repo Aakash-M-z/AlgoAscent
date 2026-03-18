@@ -1,293 +1,215 @@
-import React, { useState, useMemo } from 'react';
+import React, { useMemo } from 'react';
 import { Activity } from '../types';
 
 interface ProgressStatsProps {
   activities: Activity[];
 }
 
-interface CachedStats {
-  totalActivities: number;
-  totalTime: number;
-  problemsSolved: number;
-  totalProblems: number;
-  difficultyStats: Record<string, number>;
-  platformStats: Record<string, number>;
-  topicStats: Record<string, number>;
-  averageValue: string;
-  successRate: number;
-  recentActivities: Activity[];
-}
+const BAR_COLORS = ['#D4AF37', '#818cf8', '#22c55e', '#38bdf8', '#f59e0b', '#ef4444'];
+
+const diffColor = (d: string) =>
+  d === 'Easy' ? { color: '#22c55e', bg: 'rgba(34,197,94,0.1)', border: 'rgba(34,197,94,0.2)' }
+    : d === 'Medium' ? { color: '#f59e0b', bg: 'rgba(245,158,11,0.1)', border: 'rgba(245,158,11,0.2)' }
+      : { color: '#ef4444', bg: 'rgba(239,68,68,0.1)', border: 'rgba(239,68,68,0.2)' };
 
 const ProgressStats: React.FC<ProgressStatsProps> = ({ activities }) => {
-  const [visibleElements] = useState<number>(6); // Show all immediately
-
-  // Memoized cached statistics calculation
-  const cachedStats = useMemo<CachedStats>(() => {
-    const totalActivities = activities.length;
-    const totalTime = activities.reduce((sum, activity) => sum + activity.duration, 0);
-
-    // DSA specific stats
-    const problemsSolved = activities.filter(activity => activity.problemSolved).length;
-    const totalProblems = activities.filter(activity => activity.dsaTopic).length;
-
-    const difficultyStats = activities.reduce((acc, activity) => {
-      if (activity.difficulty) {
-        acc[activity.difficulty] = (acc[activity.difficulty] || 0) + 1;
-      }
-      return acc;
-    }, {} as Record<string, number>);
-
-    const platformStats = activities.reduce((acc, activity) => {
-      if (activity.platform) {
-        acc[activity.platform] = (acc[activity.platform] || 0) + 1;
-      }
-      return acc;
-    }, {} as Record<string, number>);
-
-    const topicStats = activities.reduce((acc, activity) => {
-      if (activity.category) {
-        acc[activity.category] = (acc[activity.category] || 0) + 1;
-      }
-      return acc;
-    }, {} as Record<string, number>);
-
-    const averageValue = activities.length > 0
-      ? (activities.reduce((sum, activity) => sum + activity.value, 0) / activities.length).toFixed(1)
+  const stats = useMemo(() => {
+    const total = activities.length;
+    const totalTime = activities.reduce((s, a) => s + a.duration, 0);
+    const solved = activities.filter(a => a.problemSolved).length;
+    const totalProblems = activities.filter(a => a.dsaTopic).length;
+    const successRate = totalProblems > 0 ? Math.round((solved / totalProblems) * 100) : 0;
+    const avgUnderstanding = total > 0
+      ? (activities.reduce((s, a) => s + a.value, 0) / total).toFixed(1)
       : '0';
 
-    const successRate = totalProblems > 0 ? (problemsSolved / totalProblems) * 100 : 0;
+    const difficulty: Record<string, number> = {};
+    const platform: Record<string, number> = {};
+    const topic: Record<string, number> = {};
 
-    const recentActivities = [...activities]
+    activities.forEach(a => {
+      if (a.difficulty) difficulty[a.difficulty] = (difficulty[a.difficulty] || 0) + 1;
+      if (a.platform) platform[a.platform] = (platform[a.platform] || 0) + 1;
+      if (a.category) topic[a.category] = (topic[a.category] || 0) + 1;
+    });
+
+    const recent = [...activities]
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
       .slice(0, 5);
 
-    return {
-      totalActivities,
-      totalTime,
-      problemsSolved,
-      totalProblems,
-      difficultyStats,
-      platformStats,
-      topicStats,
-      averageValue,
-      successRate,
-      recentActivities
-    };
+    return { total, totalTime, solved, totalProblems, successRate, avgUnderstanding, difficulty, platform, topic, recent };
   }, [activities]);
 
-  const formatTime = (minutes: number) => {
-    const hours = Math.floor(minutes / 60);
-    const mins = minutes % 60;
-    return hours > 0 ? `${hours}h ${mins}m` : `${mins}m`;
+  const fmt = (m: number) => {
+    const h = Math.floor(m / 60), min = m % 60;
+    return h > 0 ? `${h}h ${min}m` : `${min}m`;
   };
 
-  const getDifficultyColor = (difficulty: string) => {
-    switch (difficulty) {
-      case 'Easy': return 'text-green-600 bg-green-100 dark:bg-green-900 dark:text-green-400';
-      case 'Medium': return 'text-yellow-600 bg-yellow-100 dark:bg-yellow-900 dark:text-yellow-400';
-      case 'Hard': return 'text-red-600 bg-red-100 dark:bg-red-900 dark:text-red-400';
-      default: return 'text-gray-600 bg-gray-100 dark:bg-gray-700 dark:text-gray-400';
-    }
-  };
+  const kpis = [
+    { label: 'Total Sessions', value: stats.total, color: '#D4AF37', icon: '▦', sub: 'all time' },
+    { label: 'Problems Solved', value: stats.solved, color: '#22c55e', icon: '✓', sub: 'logged' },
+    { label: 'Total Time', value: fmt(stats.totalTime), color: '#818cf8', icon: '◐', sub: 'invested' },
+    { label: 'Avg Understanding', value: stats.avgUnderstanding, color: '#38bdf8', icon: '◈', sub: 'out of 10' },
+  ];
 
   return (
-    <div className="space-y-3">
-      {/* Overview Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <div className={`bg-gradient-to-br from-blue-500 to-blue-600 text-white p-4 rounded-xl transform hover:scale-105 transition-all duration-300 ${visibleElements >= 1 ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'
-          }`} style={{ transitionDelay: '0ms' }}>
-          <div className="text-2xl font-bold mb-1">{cachedStats.totalActivities}</div>
-          <div className="text-xs opacity-90 font-medium">Total Sessions</div>
-        </div>
-
-        <div className={`bg-gradient-to-br from-green-500 to-green-600 text-white p-4 rounded-xl transform hover:scale-105 transition-all duration-300 ${visibleElements >= 1 ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'
-          }`} style={{ transitionDelay: '100ms' }}>
-          <div className="text-2xl font-bold mb-1">{cachedStats.problemsSolved}</div>
-          <div className="text-xs opacity-90 font-medium">Problems Solved</div>
-        </div>
-
-        <div className={`bg-gradient-to-br from-purple-500 to-purple-600 text-white p-4 rounded-xl transform hover:scale-105 transition-all duration-300 ${visibleElements >= 1 ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'
-          }`} style={{ transitionDelay: '200ms' }}>
-          <div className="text-2xl font-bold mb-1">{formatTime(cachedStats.totalTime)}</div>
-          <div className="text-xs opacity-90 font-medium">Total Time</div>
-        </div>
-
-        <div className={`bg-gradient-to-br from-orange-500 to-orange-600 text-white p-4 rounded-xl transform hover:scale-105 transition-all duration-300 ${visibleElements >= 1 ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'
-          }`} style={{ transitionDelay: '300ms' }}>
-          <div className="text-2xl font-bold mb-1">{cachedStats.averageValue}</div>
-          <div className="text-xs opacity-90 font-medium">Avg. Understanding</div>
-        </div>
+    <div className="animate-fadeIn section-gap">
+      <div>
+        <h2 className="page-heading">Statistics</h2>
+        <p className="page-subheading">Detailed breakdown of your learning progress</p>
       </div>
 
-      {/* Success Rate */}
-      {cachedStats.totalProblems > 0 && (
-        <div className={`bg-white dark:bg-gray-800 p-3 rounded-xl border border-gray-200 dark:border-gray-700 transition-all duration-300 ${visibleElements >= 2 ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'
-          }`}>
-          <h3 className="text-lg font-semibold mb-2 text-gray-800 dark:text-white flex items-center">
-            <span className="mr-2">🎯</span>
-            Success Rate
-            <span className="ml-2 text-sm bg-green-100 dark:bg-green-900 text-green-600 dark:text-green-400 px-2 py-1 rounded-full">
-              Cached ⚡
-            </span>
-          </h3>
-          <div className="flex items-center space-x-4">
-            <div className="flex-1">
-              <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-3">
-                <div
-                  className="bg-gradient-to-r from-green-500 to-green-600 h-3 rounded-full transition-all duration-1000 ease-out"
-                  style={{ width: `${cachedStats.successRate}%` }}
-                ></div>
+      {/* KPI row */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '12px' }}>
+        {kpis.map(k => (
+          <div key={k.label} className="stat-card" style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+            <div style={{ fontSize: '1.3rem', lineHeight: 1 }}>{k.icon}</div>
+            <div className="kpi-number" style={{ color: k.color }}>{k.value}</div>
+            <div className="kpi-label">{k.label}</div>
+            <div className="kpi-sub">{k.sub}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Success rate */}
+      {stats.totalProblems > 0 && (
+        <div className="card-dark" style={{ padding: '20px 24px' }}>
+          <div className="card-title" style={{ marginBottom: '16px' }}>🎯 Success Rate</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+            <div style={{ flex: 1 }}>
+              <div style={{ height: '8px', background: 'rgba(255,255,255,0.05)', borderRadius: '999px', overflow: 'hidden' }}>
+                <div style={{
+                  height: '100%', width: `${stats.successRate}%`,
+                  background: 'linear-gradient(90deg, #22c55e, #16a34a)',
+                  borderRadius: '999px', transition: 'width 1s ease',
+                  boxShadow: '0 0 8px rgba(34,197,94,0.4)',
+                }} />
+              </div>
+              <div className="kpi-sub" style={{ marginTop: '8px' }}>
+                {stats.solved} of {stats.totalProblems} problems solved
               </div>
             </div>
-            <div className="text-sm font-medium text-gray-600 dark:text-gray-400">
-              {Math.round(cachedStats.successRate)}%
+            <div style={{ fontSize: '1.6rem', fontWeight: 800, color: '#22c55e', fontFamily: 'Poppins, sans-serif', flexShrink: 0 }}>
+              {stats.successRate}%
             </div>
-          </div>
-          <div className="text-sm text-gray-500 dark:text-gray-400 mt-2">
-            {cachedStats.problemsSolved} out of {cachedStats.totalProblems} problems solved
           </div>
         </div>
       )}
 
-      {/* Difficulty Distribution */}
-      {Object.keys(cachedStats.difficultyStats).length > 0 && (
-        <div className={`bg-white dark:bg-gray-800 p-3 rounded-xl border border-gray-200 dark:border-gray-700 transition-all duration-500 delay-600 ${visibleElements >= 3 ? 'opacity-100 transform translate-y-0' : 'opacity-0 transform translate-y-4'
-          }`}>
-          <h3 className="text-lg font-semibold mb-2 text-gray-800 dark:text-white flex items-center">
-            <span className="mr-2">📊</span>
-            Difficulty Distribution
-            <span className="ml-2 text-sm bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-400 px-2 py-1 rounded-full">
-              Cached ⚡
-            </span>
-          </h3>
-          <div className="space-y-2">
-            {Object.entries(cachedStats.difficultyStats).map(([difficulty, count], index) => (
-              <div
-                key={difficulty}
-                className={`flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-700 rounded-lg transition-all duration-300 ${visibleElements >= 3 ? 'opacity-100 transform translate-x-0' : 'opacity-0 transform translate-x-4'
-                  }`}
-                style={{ transitionDelay: `${600 + index * 100}ms` }}
-              >
-                <div className="flex items-center space-x-3">
-                  <span className={`px-2 py-1 rounded-full text-xs font-medium ${getDifficultyColor(difficulty)}`}>
-                    {difficulty}
-                  </span>
-                </div>
-                <div className="text-sm font-medium text-gray-600 dark:text-gray-400">
-                  {count} problems
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Platform Usage */}
-      {Object.keys(cachedStats.platformStats).length > 0 && (
-        <div className={`bg-white dark:bg-gray-800 p-3 rounded-xl border border-gray-200 dark:border-gray-700 transition-all duration-500 delay-900 ${visibleElements >= 4 ? 'opacity-100 transform translate-y-0' : 'opacity-0 transform translate-y-4'
-          }`}>
-          <h3 className="text-lg font-semibold mb-2 text-gray-800 dark:text-white flex items-center">
-            <span className="mr-2">🌐</span>
-            Platform Usage
-            <span className="ml-2 text-sm bg-purple-100 dark:bg-purple-900 text-purple-600 dark:text-purple-400 px-2 py-1 rounded-full">
-              Cached ⚡
-            </span>
-          </h3>
-          <div className="space-y-2">
-            {Object.entries(cachedStats.platformStats)
-              .sort(([, a], [, b]) => b - a)
-              .map(([platform, count], index) => (
-                <div
-                  key={platform}
-                  className={`flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-700 rounded-lg transition-all duration-300 ${visibleElements >= 4 ? 'opacity-100 transform translate-x-0' : 'opacity-0 transform translate-x-4'
-                    }`}
-                  style={{ transitionDelay: `${900 + index * 100}ms` }}
-                >
-                  <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{platform}</span>
-                  <div className="flex items-center space-x-3">
-                    <div className="w-20 bg-gray-200 dark:bg-gray-600 rounded-full h-2">
-                      <div
-                        className="bg-blue-500 h-2 rounded-full transition-all duration-1000 ease-out"
-                        style={{
-                          width: `${(count / Math.max(...Object.values(cachedStats.platformStats))) * 100}%`,
-                          transitionDelay: `${900 + index * 100}ms`
-                        }}
-                      ></div>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+        {/* Difficulty distribution */}
+        {Object.keys(stats.difficulty).length > 0 && (
+          <div className="card-dark" style={{ padding: '20px 24px' }}>
+            <div className="card-title" style={{ marginBottom: '16px' }}>📊 Difficulty</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              {Object.entries(stats.difficulty).map(([d, count]) => {
+                const c = diffColor(d);
+                const pct = Math.round((count / stats.total) * 100);
+                return (
+                  <div key={d}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '5px' }}>
+                      <span style={{
+                        fontSize: '0.72rem', padding: '2px 10px', borderRadius: '999px',
+                        fontWeight: 600, color: c.color, background: c.bg, border: `1px solid ${c.border}`,
+                      }}>{d}</span>
+                      <span style={{ fontSize: '0.8rem', color: c.color, fontWeight: 700 }}>{count} <span style={{ color: '#555', fontWeight: 400 }}>({pct}%)</span></span>
                     </div>
-                    <span className="text-sm font-medium text-gray-600 dark:text-gray-400 w-8 text-right">
-                      {count}
-                    </span>
+                    <div style={{ height: '4px', background: 'rgba(255,255,255,0.04)', borderRadius: '999px', overflow: 'hidden' }}>
+                      <div style={{ height: '100%', width: `${pct}%`, background: c.color, borderRadius: '999px', transition: 'width 0.8s ease' }} />
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
+            </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {/* Top Topics */}
-      {Object.keys(cachedStats.topicStats).length > 0 && (
-        <div className={`bg-white dark:bg-gray-800 p-3 rounded-xl border border-gray-200 dark:border-gray-700 transition-all duration-500 delay-1200 ${visibleElements >= 5 ? 'opacity-100 transform translate-y-0' : 'opacity-0 transform translate-y-4'
-          }`}>
-          <h3 className="text-lg font-semibold mb-2 text-gray-800 dark:text-white flex items-center">
-            <span className="mr-2">📚</span>
-            Most Studied Topics
-            <span className="ml-2 text-sm bg-indigo-100 dark:bg-indigo-900 text-indigo-600 dark:text-indigo-400 px-2 py-1 rounded-full">
-              Cached ⚡
-            </span>
-          </h3>
-          <div className="space-y-2">
-            {Object.entries(cachedStats.topicStats)
+        {/* Platform usage */}
+        {Object.keys(stats.platform).length > 0 && (
+          <div className="card-dark" style={{ padding: '20px 24px' }}>
+            <div className="card-title" style={{ marginBottom: '16px' }}>🌐 Platforms</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              {Object.entries(stats.platform)
+                .sort(([, a], [, b]) => b - a)
+                .map(([p, count], i) => {
+                  const maxVal = Math.max(...Object.values(stats.platform));
+                  const pct = Math.round((count / maxVal) * 100);
+                  return (
+                    <div key={p}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '5px' }}>
+                        <span style={{ fontSize: '0.85rem', color: '#EAEAEA' }}>{p}</span>
+                        <span style={{ fontSize: '0.8rem', color: BAR_COLORS[i % BAR_COLORS.length], fontWeight: 700 }}>{count}</span>
+                      </div>
+                      <div style={{ height: '4px', background: 'rgba(255,255,255,0.04)', borderRadius: '999px', overflow: 'hidden' }}>
+                        <div style={{
+                          height: '100%', width: `${pct}%`,
+                          background: BAR_COLORS[i % BAR_COLORS.length],
+                          borderRadius: '999px', transition: 'width 0.8s ease',
+                        }} />
+                      </div>
+                    </div>
+                  );
+                })}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Top topics */}
+      {Object.keys(stats.topic).length > 0 && (
+        <div className="card-dark" style={{ padding: '20px 24px' }}>
+          <div className="card-title" style={{ marginBottom: '16px' }}>📚 Most Studied Topics</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            {Object.entries(stats.topic)
               .sort(([, a], [, b]) => b - a)
-              .slice(0, 5)
-              .map(([topic, count], index) => (
-                <div
-                  key={topic}
-                  className={`flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-700 rounded-lg transition-all duration-300 ${visibleElements >= 5 ? 'opacity-100 transform translate-x-0' : 'opacity-0 transform translate-x-4'
-                    }`}
-                  style={{ transitionDelay: `${1200 + index * 100}ms` }}
-                >
-                  <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{topic}</span>
-                  <span className="text-sm font-medium text-gray-600 dark:text-gray-400">{count} sessions</span>
-                </div>
-              ))}
+              .slice(0, 6)
+              .map(([t, count], i) => {
+                const maxVal = Math.max(...Object.values(stats.topic));
+                const pct = Math.round((count / maxVal) * 100);
+                return (
+                  <div key={t} style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <span style={{ fontSize: '0.72rem', color: '#555', width: '16px', textAlign: 'right', flexShrink: 0 }}>#{i + 1}</span>
+                    <span style={{ fontSize: '0.875rem', color: '#EAEAEA', width: '120px', flexShrink: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t}</span>
+                    <div style={{ flex: 1, height: '4px', background: 'rgba(255,255,255,0.04)', borderRadius: '999px', overflow: 'hidden' }}>
+                      <div style={{
+                        height: '100%', width: `${pct}%`,
+                        background: `linear-gradient(90deg, ${BAR_COLORS[i % BAR_COLORS.length]}, ${BAR_COLORS[i % BAR_COLORS.length]}88)`,
+                        borderRadius: '999px', transition: 'width 0.8s ease',
+                      }} />
+                    </div>
+                    <span style={{ fontSize: '0.8rem', color: '#555', flexShrink: 0, width: '60px', textAlign: 'right' }}>{count} sessions</span>
+                  </div>
+                );
+              })}
           </div>
         </div>
       )}
 
-      {/* Recent Activity */}
-      {cachedStats.recentActivities.length > 0 && (
-        <div className={`bg-white dark:bg-gray-800 p-3 rounded-xl border border-gray-200 dark:border-gray-700 transition-all duration-500 delay-1500 ${visibleElements >= 6 ? 'opacity-100 transform translate-y-0' : 'opacity-0 transform translate-y-4'
-          }`}>
-          <h3 className="text-lg font-semibold mb-2 text-gray-800 dark:text-white flex items-center">
-            <span className="mr-2">🕒</span>
-            Recent Activity
-            <span className="ml-2 text-sm bg-orange-100 dark:bg-orange-900 text-orange-600 dark:text-orange-400 px-2 py-1 rounded-full">
-              Cached ⚡
-            </span>
-          </h3>
-          <div className="space-y-2">
-            {cachedStats.recentActivities.map((activity, index) => (
-              <div
-                key={activity.id}
-                className={`flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-lg transition-all duration-300 ${visibleElements >= 6 ? 'opacity-100 transform translate-x-0' : 'opacity-0 transform translate-x-4'
-                  }`}
-                style={{ transitionDelay: `${1500 + index * 100}ms` }}
+      {/* Recent activity */}
+      {stats.recent.length > 0 && (
+        <div className="card-dark" style={{ padding: '20px 24px' }}>
+          <div className="card-title" style={{ marginBottom: '16px' }}>🕒 Recent Activity</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            {stats.recent.map(a => (
+              <div key={a.id} style={{
+                display: 'flex', alignItems: 'center', gap: '12px',
+                padding: '10px 14px', borderRadius: '10px',
+                background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.04)',
+                transition: 'background 0.2s',
+              }}
+                onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = 'rgba(212,175,55,0.04)'}
+                onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.02)'}
               >
-                <div className="flex-1">
-                  <div className="font-medium text-gray-800 dark:text-white text-sm">
-                    {activity.dsaTopic || activity.category}
+                <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: a.problemSolved ? '#22c55e' : '#D4AF37', flexShrink: 0 }} />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: '0.875rem', color: '#EAEAEA', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {a.dsaTopic || a.category}
                   </div>
-                  <div className="text-xs text-gray-500 dark:text-gray-400">
-                    {activity.description}
-                  </div>
+                  <div className="kpi-sub" style={{ marginTop: '2px' }}>{a.description}</div>
                 </div>
-                <div className="text-right ml-4">
-                  <div className="text-sm font-medium text-gray-600 dark:text-gray-400">
-                    {formatTime(activity.duration)}
-                  </div>
-                  <div className="text-xs text-gray-500 dark:text-gray-400">
-                    {new Date(activity.date).toLocaleDateString()}
-                  </div>
+                <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                  <div style={{ fontSize: '0.8rem', color: '#888' }}>{fmt(a.duration)}</div>
+                  <div className="kpi-sub">{new Date(a.date).toLocaleDateString()}</div>
                 </div>
               </div>
             ))}
@@ -295,11 +217,12 @@ const ProgressStats: React.FC<ProgressStatsProps> = ({ activities }) => {
         </div>
       )}
 
-      {/* Cache Info */}
-      <div className={`text-center text-xs text-gray-400 dark:text-gray-500 transition-all duration-500 delay-1800 ${visibleElements >= 6 ? 'opacity-100' : 'opacity-0'
-        }`}>
-        ⚡ Statistics cached for optimal performance • Last calculated: {new Date().toLocaleTimeString()}
-      </div>
+      {activities.length === 0 && (
+        <div style={{ textAlign: 'center', padding: '80px 20px' }}>
+          <div style={{ fontSize: '3rem', marginBottom: '16px', opacity: 0.15 }}>▦</div>
+          <p style={{ color: '#444', fontSize: '0.9rem' }}>No data yet. Start logging activities to see your stats.</p>
+        </div>
+      )}
     </div>
   );
 };
