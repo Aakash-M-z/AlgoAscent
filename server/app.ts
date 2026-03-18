@@ -229,6 +229,303 @@ api.delete('/tasks/:id', async (req, res) => {
     }
 });
 
+import { PROBLEM_DATASET, DIFF_ORDER, ProblemRecord } from '../shared/problemDataset.js';
+
+// ── Recommendation engine ────────────────────────────────────────
+
+interface ActivityInput {
+    topic: string;
+    difficulty: string;
+    solved: boolean;
+    date: string;
+}
+
+interface RecommendedProblem extends ProblemRecord {
+    reason: string;
+    score: number;
+    isNew: boolean;
+}
+
+interface RecommendationResponse {
+    recommendedDifficulty: 'Easy' | 'Medium' | 'Hard';
+    difficultyReason: string;
+    topicPriority: { topic: string; reason: string; urgency: 'high' | 'medium' | 'low' }[];
+    problems: RecommendedProblem[];
+    solvedIds: string[];
+}
+
+function buildRecommendations(activities: ActivityInput[]): RecommendationResponse {
+    // ── 1. Build per-topic stats ──────────────────────────────────
+    const topicStats: Record<string, { solved: number; attempted: number; lastSeen: string; difficulties: string[] }> = {};
+
+    activities.forEach(a => {
+        const t = a.topic || 'General';
+        if (!topicStats[t]) topicStats[t] = { solved: 0, attempted: 0, lastSeen: a.date, difficulties: [] };
+        if (a.solved) topicStats[t].solved++;
+        else topicStats[t].attempted++;
+        if (a.date > topicStats[t].lastSeen) topicStats[t].lastSeen = a.date;
+        if (a.difficulty) topicStats[t].difficulties.push(a.difficulty);
+    });
+
+    // ── 2. Determine recommended difficulty ──────────────────────
+    const totalSolved = activities.filter(a => a.solved).length;
+    const recentSolved = activities
+        .filter(a => a.solved && new Date(a.date).getTime() > Date.now() - 7 * 86_400_000).length;
+    const hardSolved = activities.filter(a => a.solved && a.difficulty === 'Hard').length;
+    const mediumSolved = activities.filter(a => a.solved && a.difficulty === 'Medium').length;
+    const solveRate = activities.length ? activities.filter(a => a.solved).length / activities.length : 0;
+
+    let recommendedDifficulty: 'Easy' | 'Medium' | 'Hard' = 'Easy';
+    let difficultyReason = '';
+
+    if (totalSolved === 0) {
+        recommendedDifficulty = 'Easy';
+        difficultyReason = 'Start with Easy problems to build confidence and pattern recognition.';
+    } else if (solveRate >= 0.75 && mediumSolved >= 5 && hardSolved >= 2) {
+        recommendedDifficulty = 'Hard';
+        difficultyReason = `Strong ${Math.round(solveRate * 100)}% solve rate with ${hardSolved} Hard problems solved — ready for Hard challenges.`;
+    } else if (solveRate >= 0.55 && mediumSolved >= 3) {
+        recommendedDifficulty = 'Medium';
+        difficultyReason = `${Math.round(solveRate * 100)}% solve rate — Medium problems will push your growth optimally.`;
+    } else if (totalSolved >= 3 && solveRate >= 0.4) {
+        recommendedDifficulty = 'Medium';
+        difficultyReason = `You've solved ${totalSolved} problems. Time to step up to Medium difficulty.`;
+    } else {
+        recommendedDifficulty = 'Easy';
+        difficultyReason = `${Math.round(solveRate * 100)}% solve rate — solidify Easy problems before moving up.`;
+    }
+
+    // ── 3. Topic priority ────────────────────────────────────────
+    const coveredTopics = new Set(Object.keys(topicStats));
+    const allTopics = [...new Set(PROBLEM_DATASET.map(p => p.topic))];
+    const untouchedTopics = allTopics.filter(t => !coveredTopics.has(t));
+
+    const topicPriority: RecommendationResponse['topicPriority'] = [];
+
+    // Weak topics: attempted but low solve rate
+    Object.entries(topicStats)
+        .filter(([, s]) => s.attempted > 0 && s.solved / (s.solved + s.attempted) < 0.4)
+        .sort(([, a], [, b]) => (a.solved / (a.solved + a.attempted)) - (b.solved / (b.solved + b.attempted)))
+        .slice(0, 3)
+        .forEach(([topic, s]) => {
+            const rate = Math.round((s.solved / (s.solved + s.attempted)) * 100);
+            topicPriority.push({ topic, reason: `Only ${rate}% solve rate — needs focused practice`, urgency: 'high' });
+        });
+
+    // Stale topics: haven't touched in 14+ days
+    const twoWeeksAgo = new Date(Date.now() - 14 * 86_400_000).toISOString().slice(0, 10);
+    Object.entries(topicStats)
+        .filter(([, s]) => s.lastSeen < twoWeeksAgo && s.solved > 0)
+        .slice(0, 2)
+        .forEach(([topic]) => {
+            topicPriority.push({ topic, reason: 'Not practiced in 2+ weeks — review to retain', urgency: 'medium' });
+        });
+
+    // Untouched topics
+    untouchedTopics.slice(0, 3).forEach(topic => {
+        topicPriority.push({ topic, reason: 'Not started yet — broaden your coverage', urgency: 'low' });
+    });
+
+    // ── 4. Score and rank problems ───────────────────────────────
+    const solvedNames = new Set(activities.filter(a => a.solved).map(a => a.topic + ':' + a.difficulty));
+    // Use problem name as proxy for "already solved" since we don't store problem IDs in activities
+    const attemptedTopicDiff = new Set(activities.map(a => `${a.topic}:${a.difficulty}`));
+
+    const scored: RecommendedProblem[] = PROBLEM_DATASET.map(p => {
+        let score = 0;
+        const tStats = topicStats[p.topic];
+        const diffScore = DIFF_ORDER[p.difficulty] ?? 1;
+        const targetDiffScore = DIFF_ORDER[recommendedDifficulty];
+
+        // Difficulty match — prefer recommended, allow ±1
+        const diffDelta = Math.abs(diffScore - targetDiffScore);
+        if (diffDelta === 0) score += 40;
+        else if (diffDelta === 1) score += 20;
+
+        // Weak topic bonus
+        if (tStats && tStats.solved / Math.max(tStats.solved + tStats.attempted, 1) < 0.4) score += 25;
+
+        // Untouched topic bonus
+        if (!coveredTopics.has(p.topic)) score += 20;
+
+        // Stale topic bonus
+        if (tStats && tStats.lastSeen < twoWeeksAgo) score += 15;
+
+        // Prereqs met
+        const prereqsMet = p.prereqs.every(req => coveredTopics.has(req) || req === '');
+        if (prereqsMet) score += 15;
+        else score -= 20;
+
+        // Slight recency penalty for topics done this week (avoid repetition)
+        if (tStats && tStats.lastSeen >= new Date(Date.now() - 3 * 86_400_000).toISOString().slice(0, 10)) score -= 5;
+
+        // Build reason string
+        let reason = '';
+        if (!coveredTopics.has(p.topic)) reason = `New topic to explore`;
+        else if (tStats && tStats.solved / Math.max(tStats.solved + tStats.attempted, 1) < 0.4) reason = `Strengthen weak ${p.topic} skills`;
+        else if (tStats && tStats.lastSeen < twoWeeksAgo) reason = `Review ${p.topic} — not practiced recently`;
+        else reason = `Good next step in ${p.topic}`;
+
+        if (p.difficulty === recommendedDifficulty) reason += ` · Matches your current level`;
+
+        return { ...p, score, reason, isNew: !coveredTopics.has(p.topic) };
+    });
+
+    // Sort by score desc, deduplicate by topic (max 2 per topic in top results)
+    const topicCount: Record<string, number> = {};
+    const problems = scored
+        .sort((a, b) => b.score - a.score)
+        .filter(p => {
+            topicCount[p.topic] = (topicCount[p.topic] || 0) + 1;
+            return topicCount[p.topic] <= 2;
+        })
+        .slice(0, 12);
+
+    const solvedIds = activities.filter(a => a.solved).map((_, i) => String(i));
+
+    return { recommendedDifficulty, difficultyReason, topicPriority, problems, solvedIds };
+}
+
+api.post('/recommendations', (req, res) => {
+    try {
+        const { activities } = req.body as { activities: ActivityInput[] };
+        if (!Array.isArray(activities)) {
+            res.status(400).json({ error: 'activities array required' }); return;
+        }
+        res.json(buildRecommendations(activities));
+    } catch (err: any) {
+        console.error('Recommendations error:', err);
+        res.status(500).json({ error: 'Failed to generate recommendations' });
+    }
+});
+
+// ── AI Analysis route ────────────────────────────────────────────
+
+api.post('/ai/analyze', async (req, res) => {
+    try {
+        const { activities, username } = req.body as {
+            activities: Array<{
+                topic: string;
+                difficulty: string;
+                solved: boolean;
+                date: string;
+                timeSpent: number;
+                category: string;
+            }>;
+            username?: string;
+        };
+
+        if (!activities || activities.length === 0) {
+            res.status(400).json({ error: 'No activity data provided' }); return;
+        }
+
+        const apiKey = process.env.OPENROUTER_API_KEY;
+        if (!apiKey || apiKey === 'your_openrouter_api_key_here') {
+            res.status(503).json({ error: 'OPENROUTER_API_KEY is not configured in .env' }); return;
+        }
+
+        // ── Build compact summary (keeps token count low) ──────────
+        const topicMap: Record<string, { solved: number; attempted: number }> = {};
+        const diffMap: Record<string, number> = { Easy: 0, Medium: 0, Hard: 0 };
+        const dailyMap: Record<string, number> = {};
+
+        activities.forEach(a => {
+            const t = a.topic || a.category || 'General';
+            if (!topicMap[t]) topicMap[t] = { solved: 0, attempted: 0 };
+            if (a.solved) topicMap[t].solved++; else topicMap[t].attempted++;
+            if (a.difficulty && diffMap[a.difficulty] !== undefined) diffMap[a.difficulty]++;
+            const day = a.date?.slice(0, 10);
+            if (day) dailyMap[day] = (dailyMap[day] || 0) + 1;
+        });
+
+        const totalSolved = activities.filter(a => a.solved).length;
+        const totalAttempted = activities.length - totalSolved;
+        const activeDays = Object.keys(dailyMap).length;
+        const topicSummary = Object.entries(topicMap)
+            .sort(([, a], [, b]) => (b.solved + b.attempted) - (a.solved + a.attempted))
+            .map(([t, v]) => `${t}: ${v.solved} solved, ${v.attempted} attempted`)
+            .join('; ');
+
+        // ── Prompts ────────────────────────────────────────────────
+        const systemPrompt =
+            'Act as a coding coach. Analyze the user\'s DSA progress and return structured insights. ' +
+            'Respond ONLY with a valid JSON object — no markdown, no explanation, no code fences.';
+
+        const userPrompt =
+            `Student: ${username || 'User'}\n` +
+            `Total solved: ${totalSolved} | Attempted (unsolved): ${totalAttempted} | Active days: ${activeDays}\n` +
+            `Difficulty — Easy: ${diffMap.Easy}, Medium: ${diffMap.Medium}, Hard: ${diffMap.Hard}\n` +
+            `Topics: ${topicSummary}\n\n` +
+            `Return this exact JSON shape:\n` +
+            `{\n` +
+            `  "strengths": ["<insight>", "<insight>", "<insight>"],\n` +
+            `  "weaknesses": ["<insight>", "<insight>", "<insight>"],\n` +
+            `  "suggestions": [\n` +
+            `    { "topic": "<topic>", "reason": "<why>", "priority": "High|Medium|Low" },\n` +
+            `    { "topic": "<topic>", "reason": "<why>", "priority": "High|Medium|Low" },\n` +
+            `    { "topic": "<topic>", "reason": "<why>", "priority": "High|Medium|Low" }\n` +
+            `  ],\n` +
+            `  "nextProblems": [\n` +
+            `    { "name": "<problem name>", "difficulty": "Easy|Medium|Hard", "topic": "<topic>", "reason": "<why this next>" },\n` +
+            `    { "name": "<problem name>", "difficulty": "Easy|Medium|Hard", "topic": "<topic>", "reason": "<why this next>" },\n` +
+            `    { "name": "<problem name>", "difficulty": "Easy|Medium|Hard", "topic": "<topic>", "reason": "<why this next>" }\n` +
+            `  ],\n` +
+            `  "overallAssessment": "<2-3 sentence summary>",\n` +
+            `  "nextMilestone": "<one concrete goal>"\n` +
+            `}`;
+
+        // ── Call OpenRouter ────────────────────────────────────────
+        const orRes = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${apiKey}`,
+                'Content-Type': 'application/json',
+                'HTTP-Referer': 'https://progress-tracker.app',
+                'X-Title': 'DSA Progress Tracker',
+            },
+            body: JSON.stringify({
+                model: 'mistralai/mixtral-8x7b-instruct',
+                messages: [
+                    { role: 'system', content: systemPrompt },
+                    { role: 'user', content: userPrompt },
+                ],
+                temperature: 0.4,
+                max_tokens: 700,
+            }),
+        });
+
+        if (!orRes.ok) {
+            const errText = await orRes.text();
+            console.error(`OpenRouter error ${orRes.status}:`, errText);
+            res.status(502).json({ error: `OpenRouter returned ${orRes.status}` }); return;
+        }
+
+        const orData = await orRes.json();
+        const raw: string = orData.choices?.[0]?.message?.content?.trim() ?? '';
+
+        if (!raw) {
+            console.error('OpenRouter returned empty content:', orData);
+            res.status(502).json({ error: 'Empty response from AI model' }); return;
+        }
+
+        // Strip markdown fences if the model wraps output anyway
+        const jsonStr = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
+
+        let result: unknown;
+        try {
+            result = JSON.parse(jsonStr);
+        } catch (parseErr) {
+            console.error('JSON parse failed. Raw content:', raw);
+            res.status(502).json({ error: 'AI returned malformed JSON', raw }); return;
+        }
+
+        res.json(result);
+    } catch (error: any) {
+        console.error('AI analysis error:', error?.message ?? error);
+        res.status(500).json({ error: 'Failed to generate analysis' });
+    }
+});
+
 // ── Admin middleware ─────────────────────────────────────────────
 const requireAdmin = async (req: Request, res: Response, next: NextFunction) => {
     const adminId = req.headers['x-admin-id'] as string;
