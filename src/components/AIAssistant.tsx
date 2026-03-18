@@ -164,8 +164,8 @@ const AIAssistant: React.FC<Props> = ({ activities, username }) => {
                         display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem',
                     }}>🤖</div>
                     <div>
-                        <h2 style={{ fontSize: '1.1rem', fontWeight: 700, color: '#EAEAEA', margin: 0 }}>AI Assistant</h2>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <h2 style={{ fontSize: '1.1rem', fontWeight: 700, color: '#EAEAEA', margin: 0, fontFamily: 'Poppins, Inter, sans-serif' }}>AI Assistant</h2>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '3px' }}>
                             <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#22c55e', boxShadow: '0 0 6px #22c55e' }} />
                             <span style={{ fontSize: '0.7rem', color: '#555' }}>Online · Score {stats.score}/100</span>
                         </div>
@@ -209,7 +209,7 @@ const AIAssistant: React.FC<Props> = ({ activities, username }) => {
                             background: msg.role === 'user' ? 'linear-gradient(135deg, #D4AF37, #B8960C)' : '#1A1A1A',
                             border: msg.role === 'user' ? 'none' : '1px solid rgba(255,255,255,0.06)',
                             color: msg.role === 'user' ? '#0B0B0B' : '#EAEAEA',
-                            fontSize: '0.875rem', lineHeight: 1.6,
+                            fontSize: '0.9rem', lineHeight: 1.65,
                             whiteSpace: 'pre-line',
                             boxShadow: msg.role === 'user' ? '0 4px 12px rgba(212,175,55,0.2)' : 'none',
                         }}>
