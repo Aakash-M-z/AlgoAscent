@@ -6,14 +6,27 @@ import { User, InsertUser, Activity, InsertActivity, AdminLog, InsertAdminLog, T
 export let mongoConnected = false;
 
 export async function connectMongo(): Promise<boolean> {
-    const uri = process.env.MONGODB_URI || 'mongodb://localhost:27017/progress_tracker';
+    const uri = process.env.MONGODB_URI || '';
+    if (!uri) {
+        console.warn('⚠️  MONGODB_URI not set — skipping MongoDB');
+        return false;
+    }
     try {
-        await mongoose.connect(uri, { serverSelectionTimeoutMS: 5000 });
+        await mongoose.connect(uri, {
+            serverSelectionTimeoutMS: 4000,  // fail fast locally
+            connectTimeoutMS: 4000,
+            socketTimeoutMS: 8000,
+        });
         mongoConnected = true;
-        console.log('✅ Connected to MongoDB');
+        console.log('✅ Connected to MongoDB Atlas');
         return true;
     } catch (err: any) {
-        console.warn('⚠️  MongoDB unavailable, falling back to file storage:', err.message);
+        // Surface the real reason so it's easy to debug
+        const reason = err?.reason?.servers
+            ? 'No reachable servers (check Atlas IP whitelist or network)'
+            : err?.message ?? String(err);
+        console.warn(`⚠️  MongoDB unavailable: ${reason}`);
+        console.warn('   → Falling back to file storage (local-data.json)');
         return false;
     }
 }
@@ -122,6 +135,20 @@ export class MongoStorage implements IStorage {
         return !!result;
     }
 
+    async incrementAiUsage(userId: string | number): Promise<User | undefined> {
+        const today = new Date().toISOString().slice(0, 10);
+        const user = await UserModel.findById(userId.toString());
+        if (!user) return undefined;
+        const resetAt = (user as any).aiUsageResetAt ?? today;
+        const newCount = resetAt === today ? ((user as any).aiUsageCount ?? 0) + 1 : 1;
+        const updated = await UserModel.findByIdAndUpdate(
+            userId.toString(),
+            { aiUsageCount: newCount, aiUsageResetAt: today },
+            { new: true }
+        );
+        return updated ? this.mapUser(updated) : undefined;
+    }
+
     // ── Mappers ──────────────────────────────────────────────────
 
     private mapUser(doc: any): User {
@@ -130,7 +157,10 @@ export class MongoStorage implements IStorage {
             username: doc.username,
             email: doc.email,
             password: doc.password,
-            role: doc.role,
+            role: doc.role ?? 'user',
+            plan: doc.plan ?? 'free',
+            aiUsageCount: doc.aiUsageCount ?? 0,
+            aiUsageResetAt: doc.aiUsageResetAt ?? new Date().toISOString().slice(0, 10),
             createdAt: doc.createdAt,
         };
     }

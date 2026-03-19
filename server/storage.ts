@@ -22,50 +22,55 @@ export interface IStorage {
   createTask(task: InsertTask): Promise<Task>;
   updateTask(id: string, data: Partial<Task>): Promise<Task | undefined>;
   deleteTask(id: string): Promise<boolean>;
+  // AI usage tracking
+  incrementAiUsage(userId: string | number): Promise<User | undefined>;
 }
 
 // Try MongoDB first; if it fails (no network, wrong URI, etc.) fall back to FileStorage
 async function createStorage(): Promise<IStorage> {
   if (process.env.MONGODB_URI) {
-    const ok = await connectMongo();
-    if (ok) return new MongoStorage();
+    try {
+      const ok = await connectMongo();
+      if (ok) {
+        console.log('📦 Using MongoDB storage');
+        return new MongoStorage();
+      }
+    } catch (err: any) {
+      console.warn('⚠️  MongoDB connect threw:', err?.message);
+    }
   }
   console.log('📁 Using file-based storage (local-data.json)');
   return new FileStorage();
 }
 
-// Export a promise that resolves to the correct storage instance
+// Resolves once the correct backend is confirmed — awaited in server/index.ts
+// so no request is served before storage is ready.
 export const storageReady: Promise<IStorage> = createStorage();
 
-// Synchronous proxy — delegates every call to whichever storage resolved
+// Async proxy — every method awaits storageReady before delegating.
+// This eliminates the race condition where early requests hit an empty FileStorage.
 class StorageProxy implements IStorage {
-  private _s: IStorage | null = null;
-  private _fallback = new FileStorage();
+  private async s(): Promise<IStorage> { return storageReady; }
 
-  constructor() {
-    storageReady.then(s => { this._s = s; });
-  }
-
-  private get s(): IStorage { return this._s ?? this._fallback; }
-
-  getUser(id: string | number) { return this.s.getUser(id); }
-  getUserByUsername(u: string) { return this.s.getUserByUsername(u); }
-  getUserByEmail(e: string) { return this.s.getUserByEmail(e); }
-  createUser(u: InsertUser) { return this.s.createUser(u); }
-  getAllUsers() { return this.s.getAllUsers(); }
-  deleteUser(id: string | number) { return this.s.deleteUser(id); }
-  getUserActivities(id: string | number) { return this.s.getUserActivities(id); }
-  getAllActivities() { return this.s.getAllActivities(); }
-  createActivity(a: InsertActivity) { return this.s.createActivity(a); }
-  updateActivity(id: string | number, a: Partial<Activity>) { return this.s.updateActivity(id, a); }
-  deleteActivity(id: string | number) { return this.s.deleteActivity(id); }
-  updateUser(id: string | number, u: Partial<User>) { return this.s.updateUser(id, u); }
-  createAdminLog(l: InsertAdminLog) { return this.s.createAdminLog(l); }
-  getAdminLogs() { return this.s.getAdminLogs(); }
-  getUserTasks(userId: string) { return this.s.getUserTasks(userId); }
-  createTask(t: InsertTask) { return this.s.createTask(t); }
-  updateTask(id: string, d: Partial<Task>) { return this.s.updateTask(id, d); }
-  deleteTask(id: string) { return this.s.deleteTask(id); }
+  async getUser(id: string | number) { return (await this.s()).getUser(id); }
+  async getUserByUsername(u: string) { return (await this.s()).getUserByUsername(u); }
+  async getUserByEmail(e: string) { return (await this.s()).getUserByEmail(e); }
+  async createUser(u: InsertUser) { return (await this.s()).createUser(u); }
+  async getAllUsers() { return (await this.s()).getAllUsers(); }
+  async deleteUser(id: string | number) { return (await this.s()).deleteUser(id); }
+  async getUserActivities(id: string | number) { return (await this.s()).getUserActivities(id); }
+  async getAllActivities() { return (await this.s()).getAllActivities(); }
+  async createActivity(a: InsertActivity) { return (await this.s()).createActivity(a); }
+  async updateActivity(id: string | number, a: Partial<Activity>) { return (await this.s()).updateActivity(id, a); }
+  async deleteActivity(id: string | number) { return (await this.s()).deleteActivity(id); }
+  async updateUser(id: string | number, u: Partial<User>) { return (await this.s()).updateUser(id, u); }
+  async createAdminLog(l: InsertAdminLog) { return (await this.s()).createAdminLog(l); }
+  async getAdminLogs() { return (await this.s()).getAdminLogs(); }
+  async getUserTasks(userId: string) { return (await this.s()).getUserTasks(userId); }
+  async createTask(t: InsertTask) { return (await this.s()).createTask(t); }
+  async updateTask(id: string, d: Partial<Task>) { return (await this.s()).updateTask(id, d); }
+  async deleteTask(id: string) { return (await this.s()).deleteTask(id); }
+  async incrementAiUsage(userId: string | number) { return (await this.s()).incrementAiUsage(userId); }
 }
 
 export const storage: IStorage = new StorageProxy();

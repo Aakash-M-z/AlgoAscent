@@ -3,6 +3,7 @@ import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import { storage } from './storage.js';
 import { InsertUser, InsertActivity, InsertTask } from '../shared/schema.js';
+import { signToken, verifyToken, extractBearer, JwtPayload } from './jwt.js';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
@@ -12,12 +13,35 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const api = express.Router();
 
-app.use(cors({ origin: '*', methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'], allowedHeaders: ['Content-Type', 'x-admin-id'] }));
+app.use(cors({
+    origin: process.env.FRONTEND_URL || '*',
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'x-admin-id', 'x-user-id'],
+    credentials: true,
+}));
 app.use(express.json());
 
-// Health check
-api.get('/health', (_req, res) => {
-    res.status(200).json({ status: 'OK', timestamp: new Date().toISOString() });
+// COOP headers — required for Google OAuth popup (window.closed) to work
+app.use((_req, res, next) => {
+    res.setHeader('Cross-Origin-Opener-Policy', 'same-origin-allow-popups');
+    res.setHeader('Cross-Origin-Embedder-Policy', 'unsafe-none');
+    next();
+});
+
+// Health check — returns storage type and env status for easy debugging
+api.get('/health', async (_req, res) => {
+    const { mongoConnected } = await import('./mongo-storage.js');
+    res.status(200).json({
+        status: 'OK',
+        timestamp: new Date().toISOString(),
+        storage: mongoConnected ? 'mongodb' : 'file',
+        env: {
+            openrouter: !!process.env.OPENROUTER_API_KEY,
+            mongodb: !!process.env.MONGODB_URI,
+            port: process.env.PORT || 3001,
+            nodeEnv: process.env.NODE_ENV || 'development',
+        },
+    });
 });
 
 // Login
@@ -32,7 +56,8 @@ api.post('/login', async (req, res) => {
             res.status(401).json({ error: 'Invalid email or password' }); return;
         }
         const { password: _, ...safeUser } = user;
-        res.json(safeUser);
+        const token = signToken({ id: user.id, email: user.email, role: user.role, plan: (user as any).plan ?? 'free' });
+        res.json({ user: safeUser, token });
     } catch (error) {
         console.error('Login error:', error);
         res.status(500).json({ error: 'Server error. Please try again.' });
@@ -53,9 +78,14 @@ api.post('/register', async (req, res) => {
         if (await storage.getUserByUsername(userData.username)) {
             res.status(409).json({ error: 'This username is already taken' }); return;
         }
+        // Ensure defaults for new fields
+        if (!(userData as any).plan) (userData as any).plan = 'free';
+        if ((userData as any).aiUsageCount === undefined) (userData as any).aiUsageCount = 0;
+        if (!(userData as any).aiUsageResetAt) (userData as any).aiUsageResetAt = new Date().toISOString().slice(0, 10);
         const user = await storage.createUser(userData);
         const { password: _, ...safeUser } = user;
-        res.status(201).json(safeUser);
+        const token = signToken({ id: user.id, email: user.email, role: user.role, plan: (user as any).plan ?? 'free' });
+        res.status(201).json({ user: safeUser, token });
     } catch (error) {
         console.error('Register error:', error);
         res.status(500).json({ error: 'Server error. Please try again.' });
@@ -89,11 +119,15 @@ api.post('/auth/google', async (req, res) => {
             user = await storage.createUser({
                 username, email,
                 password: Math.random().toString(36).slice(-12),
-                role: email === 'aakashleo420@gmail.com' ? 'admin' : 'user'
+                role: email === 'aakashleo420@gmail.com' ? 'admin' : 'user',
+                plan: 'free',
+                aiUsageCount: 0,
+                aiUsageResetAt: new Date().toISOString().slice(0, 10),
             });
         }
         const { password: _, ...safeUser } = user;
-        res.json(safeUser);
+        const token = signToken({ id: user.id, email: user.email, role: user.role, plan: (user as any).plan ?? 'free' });
+        res.json({ user: safeUser, token });
     } catch (error) {
         console.error('Google auth error:', error);
         res.status(500).json({ error: 'Server error. Please try again.' });
@@ -386,6 +420,73 @@ function buildRecommendations(activities: ActivityInput[]): RecommendationRespon
     return { recommendedDifficulty, difficultyReason, topicPriority, problems, solvedIds };
 }
 
+// ── Auth middleware ──────────────────────────────────────────────
+
+/**
+ * requireAuth — verifies JWT from Authorization: Bearer <token>
+ * Attaches decoded payload to req.authUser
+ */
+const requireAuth = (req: Request, res: Response, next: NextFunction) => {
+    const token = extractBearer(req.headers.authorization);
+    if (!token) { res.status(401).json({ error: 'Unauthorized — Bearer token required' }); return; }
+    const payload = verifyToken(token);
+    if (!payload) { res.status(401).json({ error: 'Unauthorized — invalid or expired token' }); return; }
+    (req as any).authUser = payload;
+    next();
+};
+
+const AI_FREE_DAILY_LIMIT = 2;
+
+/**
+ * checkPlanAccess — requireAuth + AI quota enforcement.
+ * Admins and premium users bypass the daily limit.
+ * Free users are limited to AI_FREE_DAILY_LIMIT requests/day (checked live from DB).
+ */
+const checkPlanAccess = async (req: Request, res: Response, next: NextFunction) => {
+    const token = extractBearer(req.headers.authorization);
+    if (!token) { res.status(401).json({ error: 'Unauthorized — Bearer token required' }); return; }
+    const payload = verifyToken(token);
+    if (!payload) { res.status(401).json({ error: 'Unauthorized — invalid or expired token' }); return; }
+
+    // Admins and premium users: skip quota check
+    if (payload.role === 'admin' || payload.plan === 'premium') {
+        (req as any).authUser = payload;
+        next(); return;
+    }
+
+    // Free users: check live DB count (token doesn't carry mutable usage)
+    const user = await storage.getUser(payload.id);
+    if (!user) { res.status(401).json({ error: 'Unauthorized — user not found' }); return; }
+
+    const today = new Date().toISOString().slice(0, 10);
+    const resetAt = (user as any).aiUsageResetAt ?? today;
+    const usageToday = resetAt === today ? ((user as any).aiUsageCount ?? 0) : 0;
+
+    if (usageToday >= AI_FREE_DAILY_LIMIT) {
+        res.status(403).json({
+            error: 'AI_LIMIT_REACHED',
+            message: `Free plan allows ${AI_FREE_DAILY_LIMIT} AI requests per day. Upgrade to Premium for unlimited access.`,
+            usageToday, limit: AI_FREE_DAILY_LIMIT, plan: 'free',
+        }); return;
+    }
+    (req as any).authUser = payload;
+    next();
+};
+
+/**
+ * requireAdmin — verifies JWT and checks role === 'admin'.
+ * No separate x-admin-id header needed — role is in the token.
+ */
+const requireAdmin = (req: Request, res: Response, next: NextFunction) => {
+    const token = extractBearer(req.headers.authorization);
+    if (!token) { res.status(401).json({ error: 'Unauthorized' }); return; }
+    const payload = verifyToken(token);
+    if (!payload) { res.status(401).json({ error: 'Unauthorized — invalid or expired token' }); return; }
+    if (payload.role !== 'admin') { res.status(403).json({ error: 'Forbidden: admin only' }); return; }
+    (req as any).adminUser = payload;
+    next();
+};
+
 api.post('/recommendations', (req, res) => {
     try {
         const { activities } = req.body as { activities: ActivityInput[] };
@@ -401,8 +502,9 @@ api.post('/recommendations', (req, res) => {
 
 // ── AI Analysis route ────────────────────────────────────────────
 
-api.post('/ai/analyze', async (req, res) => {
+api.post('/ai/analyze', checkPlanAccess, async (req, res) => {
     try {
+        const authUser = (req as any).authUser;
         const { activities, username } = req.body as {
             activities: Array<{
                 topic: string;
@@ -421,8 +523,12 @@ api.post('/ai/analyze', async (req, res) => {
 
         const apiKey = process.env.OPENROUTER_API_KEY;
         if (!apiKey || apiKey === 'your_openrouter_api_key_here') {
-            res.status(503).json({ error: 'OPENROUTER_API_KEY is not configured in .env' }); return;
+            res.status(501).json({ error: 'OPENROUTER_API_KEY is not configured in .env — AI analysis is disabled' }); return;
         }
+
+        // Abort if OpenRouter takes too long (15s)
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 15_000);
 
         // ── Build compact summary (keeps token count low) ──────────
         const topicMap: Record<string, { solved: number; attempted: number }> = {};
@@ -492,7 +598,9 @@ api.post('/ai/analyze', async (req, res) => {
                 temperature: 0.4,
                 max_tokens: 700,
             }),
+            signal: controller.signal,
         });
+        clearTimeout(timeout);
 
         if (!orRes.ok) {
             const errText = await orRes.text();
@@ -519,23 +627,74 @@ api.post('/ai/analyze', async (req, res) => {
             res.status(502).json({ error: 'AI returned malformed JSON', raw }); return;
         }
 
+        // Increment usage for free users only
+        if (authUser && authUser.role !== 'admin' && authUser.plan !== 'premium') {
+            await storage.incrementAiUsage(authUser.id).catch(() => { });
+        }
+
         res.json(result);
     } catch (error: any) {
         console.error('AI analysis error:', error?.message ?? error);
+        if (error?.name === 'AbortError') {
+            res.status(504).json({ error: 'OpenRouter request timed out after 15s' }); return;
+        }
         res.status(500).json({ error: 'Failed to generate analysis' });
     }
 });
 
-// ── Admin middleware ─────────────────────────────────────────────
-const requireAdmin = async (req: Request, res: Response, next: NextFunction) => {
-    const adminId = req.headers['x-admin-id'] as string;
-    if (!adminId) { res.status(401).json({ error: 'Unauthorized' }); return; }
-    const user = await storage.getUser(adminId);
-    if (!user || user.role !== 'admin') { res.status(403).json({ error: 'Forbidden: admin only' }); return; }
-    (req as any).adminUser = user;
-    next();
-};
+// ── AI Explain Topic route ───────────────────────────────────────
 
+api.post('/ai/explain-topic', checkPlanAccess, async (req, res) => {
+    try {
+        const authUser = (req as any).authUser;
+        const { subject, topic, subtopics, interviewQuestions } = req.body as {
+            subject: string; topic: string; subtopics: string[]; interviewQuestions: string[];
+        };
+        if (!subject || !topic) { res.status(400).json({ error: 'subject and topic are required' }); return; }
+
+        const apiKey = process.env.OPENROUTER_API_KEY;
+        if (!apiKey || apiKey === 'your_openrouter_api_key_here') {
+            res.status(501).json({ error: 'OPENROUTER_API_KEY not configured' }); return;
+        }
+
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 15_000);
+
+        const systemPrompt = 'You are a senior software engineer and interview coach. Explain technical topics clearly for placement preparation. Use simple language, concrete examples, and highlight what interviewers actually ask.';
+        const userPrompt = `Subject: ${subject}\nTopic: ${topic}\nSubtopics: ${subtopics.join(', ')}\n\nProvide a clear, structured explanation (3-5 paragraphs) covering:\n1. Core concept in simple terms\n2. How it works (with a brief example)\n3. Why it matters in interviews\n4. Common mistakes to avoid\n\nBe concise and practical. No markdown headers — use plain paragraphs.`;
+
+        const orRes = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${apiKey}`,
+                'Content-Type': 'application/json',
+                'HTTP-Referer': 'https://progress-tracker.app',
+                'X-Title': 'DSA Progress Tracker',
+            },
+            body: JSON.stringify({
+                model: 'mistralai/mixtral-8x7b-instruct',
+                messages: [{ role: 'system', content: systemPrompt }, { role: 'user', content: userPrompt }],
+                temperature: 0.5,
+                max_tokens: 600,
+            }),
+            signal: controller.signal,
+        });
+        clearTimeout(timeout);
+
+        if (!orRes.ok) { res.status(502).json({ error: `OpenRouter returned ${orRes.status}` }); return; }
+        const orData = await orRes.json();
+        const explanation = orData.choices?.[0]?.message?.content?.trim() ?? '';
+        if (!explanation) { res.status(502).json({ error: 'Empty response from AI' }); return; }
+        if (authUser && authUser.role !== 'admin' && authUser.plan !== 'premium') {
+            await storage.incrementAiUsage(authUser.id).catch(() => { });
+        }
+        res.json({ explanation });
+    } catch (error: any) {
+        if (error?.name === 'AbortError') { res.status(504).json({ error: 'AI request timed out' }); return; }
+        console.error('explain-topic error:', error);
+        res.status(500).json({ error: 'Failed to generate explanation' });
+    }
+});
 // ── Admin routes ─────────────────────────────────────────────────
 
 // GET all users
@@ -551,7 +710,7 @@ api.get('/admin/users', requireAdmin, async (req, res) => {
 // DELETE user
 api.delete('/admin/users/:id', requireAdmin, async (req, res) => {
     try {
-        const admin = (req as any).adminUser;
+        const admin = (req as any).adminUser as JwtPayload;
         if (req.params.id === admin.id) { res.status(400).json({ error: 'Cannot delete yourself' }); return; }
         const target = await storage.getUser(req.params.id);
         if (!target) { res.status(404).json({ error: 'User not found' }); return; }
@@ -570,7 +729,7 @@ api.delete('/admin/users/:id', requireAdmin, async (req, res) => {
 // PATCH user role
 api.patch('/admin/users/:id/role', requireAdmin, async (req, res) => {
     try {
-        const admin = (req as any).adminUser;
+        const admin = (req as any).adminUser as JwtPayload;
         const { role } = req.body;
         if (!['admin', 'user'].includes(role)) { res.status(400).json({ error: 'Role must be admin or user' }); return; }
         if (req.params.id === admin.id) { res.status(400).json({ error: 'Cannot change your own role' }); return; }
@@ -605,6 +764,52 @@ api.get('/admin/activities', requireAdmin, async (req, res) => {
 api.get('/admin/logs', requireAdmin, async (_req, res) => {
     try {
         res.json(await storage.getAdminLogs());
+    } catch {
+        res.status(500).json({ error: 'Server error' });
+    }
+});
+
+// PATCH user plan (admin only)
+api.patch('/admin/users/:id/plan', requireAdmin, async (req, res) => {
+    try {
+        const admin = (req as any).adminUser as JwtPayload;
+        const { plan } = req.body;
+        if (!['free', 'premium'].includes(plan)) { res.status(400).json({ error: 'Plan must be free or premium' }); return; }
+        const updated = await storage.updateUser(req.params.id, { plan } as any);
+        if (!updated) { res.status(404).json({ error: 'User not found' }); return; }
+        await storage.createAdminLog({
+            adminId: admin.id, adminEmail: admin.email,
+            action: 'CHANGE_PLAN', targetId: updated.id, targetEmail: updated.email,
+            detail: `Changed ${updated.email} plan to ${plan}`,
+        });
+        const { password: _, ...safe } = updated;
+        res.json(safe);
+    } catch {
+        res.status(500).json({ error: 'Server error' });
+    }
+});
+
+// GET current user's AI usage status
+api.get('/users/:userId/ai-usage', requireAuth, async (req, res) => {
+    try {
+        const authUser = (req as any).authUser as JwtPayload;
+        if (authUser.role !== 'admin' && authUser.id !== req.params.userId) {
+            res.status(403).json({ error: 'Forbidden' }); return;
+        }
+        const user = await storage.getUser(req.params.userId);
+        if (!user) { res.status(404).json({ error: 'User not found' }); return; }
+        const today = new Date().toISOString().slice(0, 10);
+        const resetAt = (user as any).aiUsageResetAt ?? today;
+        const usageToday = resetAt === today ? ((user as any).aiUsageCount ?? 0) : 0;
+        res.json({
+            plan: (user as any).plan ?? 'free',
+            usageToday,
+            limit: AI_FREE_DAILY_LIMIT,
+            remaining: (user as any).plan === 'premium' || user.role === 'admin'
+                ? null  // null = unlimited
+                : Math.max(0, AI_FREE_DAILY_LIMIT - usageToday),
+            resetsAt: today,
+        });
     } catch {
         res.status(500).json({ error: 'Server error' });
     }

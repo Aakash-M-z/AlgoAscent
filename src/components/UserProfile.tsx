@@ -1,4 +1,5 @@
 ﻿import React, { useMemo } from 'react';
+import { motion } from 'framer-motion';
 import { Activity } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -17,8 +18,8 @@ function calcStreak(activities: Activity[]): number {
     if (!dates.length || (dates[0] !== today && dates[0] !== yesterday)) return 0;
     let s = 1;
     for (let i = 1; i < dates.length; i++) {
-        const diff = Math.round((new Date(dates[i - 1]).getTime() - new Date(dates[i]).getTime()) / 864e5);
-        if (diff === 1) s++; else break;
+        if (Math.round((new Date(dates[i - 1]).getTime() - new Date(dates[i]).getTime()) / 864e5) === 1) s++;
+        else break;
     }
     return s;
 }
@@ -51,6 +52,13 @@ const UserProfile: React.FC<Props> = ({ activities = [] }) => {
             Math.min(stats.streak / Math.max(nextLevel.minStreak, 1), 1)) / 3) * 100
     ) : 100;
 
+    const kpis = [
+        { label: 'Problems Solved', value: stats.solved, icon: '✓' },
+        { label: 'Topics Covered', value: stats.topics, icon: '◎' },
+        { label: 'Day Streak', value: stats.streak, icon: '🔥' },
+        { label: 'Hours Studied', value: stats.hours, icon: '⏱' },
+    ];
+
     return (
         <div className="section-gap animate-fadeIn">
             <div>
@@ -59,7 +67,13 @@ const UserProfile: React.FC<Props> = ({ activities = [] }) => {
             </div>
 
             {/* User card */}
-            <div className="card-dark" style={{ padding: '24px', display: 'flex', alignItems: 'center', gap: '20px', flexWrap: 'wrap' }}>
+            <motion.div
+                className="card-dark"
+                initial={{ opacity: 0, y: 16 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.35 }}
+                style={{ padding: '24px', display: 'flex', alignItems: 'center', gap: '20px', flexWrap: 'wrap' }}
+            >
                 <div style={{
                     width: '64px', height: '64px', borderRadius: '50%',
                     background: 'linear-gradient(135deg, #D4AF37, #8A6012)',
@@ -78,21 +92,23 @@ const UserProfile: React.FC<Props> = ({ activities = [] }) => {
                         <span className="kpi-sub">· Level {levelIdx + 1}</span>
                     </div>
                 </div>
-            </div>
+            </motion.div>
 
             {/* KPI row */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '12px' }}>
-                {[
-                    { label: 'Problems Solved', value: stats.solved, icon: '✓' },
-                    { label: 'Topics Covered', value: stats.topics, icon: '◎' },
-                    { label: 'Day Streak', value: stats.streak, icon: '🔥' },
-                    { label: 'Hours Studied', value: stats.hours, icon: '⏱' },
-                ].map(k => (
-                    <div key={k.label} className="stat-card" style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                {kpis.map((k, i) => (
+                    <motion.div
+                        key={k.label}
+                        className="stat-card"
+                        initial={{ opacity: 0, y: 12 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: 0.1 + i * 0.06, duration: 0.3 }}
+                        style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}
+                    >
                         <div style={{ fontSize: '1.2rem' }}>{k.icon}</div>
                         <div className="kpi-number">{k.value}</div>
                         <div className="kpi-label">{k.label}</div>
-                    </div>
+                    </motion.div>
                 ))}
             </div>
 
@@ -106,7 +122,12 @@ const UserProfile: React.FC<Props> = ({ activities = [] }) => {
                         <span className="kpi-sub">{progressToNext}%</span>
                     </div>
                     <div style={{ height: '6px', background: 'rgba(255,255,255,0.05)', borderRadius: '999px', overflow: 'hidden', marginBottom: '16px' }}>
-                        <div style={{ height: '100%', width: `${progressToNext}%`, background: 'linear-gradient(90deg, #D4AF37, #FFD700)', borderRadius: '999px', transition: 'width 0.8s ease' }} />
+                        <motion.div
+                            initial={{ width: 0 }}
+                            animate={{ width: `${progressToNext}%` }}
+                            transition={{ duration: 0.9, ease: [0.4, 0, 0.2, 1], delay: 0.3 }}
+                            style={{ height: '100%', background: 'linear-gradient(90deg, #D4AF37, #FFD700)', borderRadius: '999px' }}
+                        />
                     </div>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px' }}>
                         {[
@@ -133,12 +154,18 @@ const UserProfile: React.FC<Props> = ({ activities = [] }) => {
                     {LEVELS.map((l, i) => {
                         const isCurrent = l.key === currentLevel.key;
                         return (
-                            <div key={l.key} style={{
-                                display: 'flex', alignItems: 'center', gap: '14px',
-                                padding: '12px 16px', borderRadius: '12px',
-                                background: isCurrent ? 'rgba(212,175,55,0.07)' : 'rgba(255,255,255,0.02)',
-                                border: `1px solid ${isCurrent ? l.color + '50' : 'rgba(255,255,255,0.04)'}`,
-                            }}>
+                            <motion.div
+                                key={l.key}
+                                initial={{ opacity: 0, x: -10 }}
+                                animate={{ opacity: 1, x: 0 }}
+                                transition={{ delay: 0.2 + i * 0.07, duration: 0.3 }}
+                                style={{
+                                    display: 'flex', alignItems: 'center', gap: '14px',
+                                    padding: '12px 16px', borderRadius: '12px',
+                                    background: isCurrent ? 'rgba(212,175,55,0.07)' : 'rgba(255,255,255,0.02)',
+                                    border: `1px solid ${isCurrent ? l.color + '50' : 'rgba(255,255,255,0.04)'}`,
+                                }}
+                            >
                                 <span style={{ fontSize: '1.4rem' }}>{l.icon}</span>
                                 <div style={{ flex: 1 }}>
                                     <div style={{ fontSize: '0.875rem', fontWeight: 600, color: isCurrent ? l.color : '#666' }}>{l.label}</div>
@@ -148,7 +175,7 @@ const UserProfile: React.FC<Props> = ({ activities = [] }) => {
                                     ? <span style={{ color: '#22c55e', fontSize: '0.8rem', fontWeight: 700 }}>✓ Current</span>
                                     : i > levelIdx && <span className="kpi-sub">Locked</span>
                                 }
-                            </div>
+                            </motion.div>
                         );
                     })}
                 </div>

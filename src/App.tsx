@@ -36,6 +36,38 @@ import AnalyticsDashboard from './components/AnalyticsDashboard';
 import ErrorBoundary from './components/ErrorBoundary';
 import IntroScreen from './components/IntroScreen';
 import StatsCards from './components/StatsCards';
+import AIInsightCard from './components/AIInsightCard';
+import NextProblemCTA from './components/NextProblemCTA';
+import CoreSubjects from './components/CoreSubjects';
+import XPSystem from './components/XPSystem';
+import { motion, AnimatePresence } from 'framer-motion';
+
+/* ── Demo activities shown to new users ───────────────────────── */
+const DEMO_ACTIVITIES: Activity[] = (() => {
+    const topics = ['Arrays', 'Trees', 'Graphs', 'Dynamic Programming', 'Linked Lists', 'Stacks', 'Binary Search'];
+    const diffs: Activity['difficulty'][] = ['Easy', 'Medium', 'Hard'];
+    const descs = ['Two Sum', 'Binary Tree Inorder', 'Number of Islands', 'Coin Change', 'Reverse Linked List', 'Valid Parentheses', 'Search in Rotated Array'];
+    const out: Activity[] = [];
+    for (let i = 59; i >= 0; i--) {
+        if (Math.random() > 0.5) {
+            const n = Math.floor(Math.random() * 2) + 1;
+            for (let j = 0; j < n; j++) {
+                const ti = Math.floor(Math.random() * topics.length);
+                out.push({
+                    id: `demo-${i}-${j}`,
+                    date: new Date(Date.now() - i * 86_400_000).toISOString().slice(0, 10),
+                    category: topics[ti],
+                    duration: 20 + Math.floor(Math.random() * 50),
+                    description: descs[ti % descs.length],
+                    value: Math.floor(Math.random() * 4) + 1,
+                    difficulty: diffs[Math.floor(Math.random() * 3)],
+                    problemSolved: Math.random() > 0.28,
+                });
+            }
+        }
+    }
+    return out;
+})();
 
 const NAV_ITEMS = [
     { id: 'overview', label: 'Overview', icon: '⊞', section: 'main' },
@@ -43,8 +75,10 @@ const NAV_ITEMS = [
     { id: 'analytics', label: 'Analytics', icon: '◐', section: 'main' },
     { id: 'ai', label: 'AI Assistant', icon: '◈', section: 'main' },
     { id: 'roadmap', label: 'DSA Roadmap', icon: '◎', section: 'tools' },
+    { id: 'subjects', label: 'Core Subjects', icon: '⬡', section: 'tools' },
     { id: 'stats', label: 'Statistics', icon: '▦', section: 'tools' },
     { id: 'badges', label: 'Badges', icon: '◆', section: 'tools' },
+    { id: 'xp', label: 'XP & Levels', icon: '★', section: 'tools' },
     { id: 'resources', label: 'Resources', icon: '◇', section: 'tools' },
     { id: 'profile', label: 'Profile', icon: '◉', section: 'account' },
 ] as const;
@@ -117,7 +151,7 @@ const Sidebar: React.FC<{
             </nav>
             {!collapsed && (
                 <div style={{ padding: '12px 14px', borderTop: '1px solid rgba(212,175,55,0.07)' }}>
-                    <div className="section-label" style={{ color: 'rgba(212,175,55,0.25)' }}>Progress Tracker v2</div>
+                    <div className="section-label" style={{ color: 'rgba(212,175,55,0.25)' }}>Placement Prep v3</div>
                 </div>
             )}
         </aside>
@@ -131,23 +165,55 @@ const OverviewTab: React.FC<{
     onAddActivity: (a: Activity) => Promise<boolean>;
     onDeleteActivity: (id: string) => void;
 }> = ({ activities, loading, onAddActivity, onDeleteActivity }) => {
+    const isNewUser = activities.length === 0;
+    const displayActivities = isNewUser ? DEMO_ACTIVITIES : activities;
 
     return (
         <div className="section-gap">
+            {/* Demo banner */}
+            <AnimatePresence>
+                {isNewUser && !loading && (
+                    <motion.div
+                        initial={{ opacity: 0, y: -10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -10 }}
+                        transition={{ duration: 0.35 }}
+                        style={{
+                            padding: '12px 18px', borderRadius: '12px',
+                            background: 'linear-gradient(135deg, rgba(212,175,55,0.08), rgba(212,175,55,0.03))',
+                            border: '1px solid rgba(212,175,55,0.22)',
+                            display: 'flex', alignItems: 'center', gap: '12px',
+                        }}
+                    >
+                        <span style={{ fontSize: '1.1rem' }}>✦</span>
+                        <div style={{ flex: 1 }}>
+                            <div style={{ fontSize: '0.82rem', fontWeight: 600, color: '#D4AF37' }}>Welcome — you're seeing demo data</div>
+                            <div style={{ fontSize: '0.75rem', color: '#555', marginTop: '2px' }}>Log your first problem below to replace this with your real progress.</div>
+                        </div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+
             {/* KPI cards */}
-            {loading ? <SkeletonStatRow /> : <StatsCards activities={activities} />}
+            {loading ? <SkeletonStatRow /> : <StatsCards activities={displayActivities} />}
+
+            {/* AI Insight */}
+            {!loading && <AIInsightCard activities={displayActivities} isDemo={isNewUser} />}
+
+            {/* Next recommended problem CTA */}
+            {!loading && <NextProblemCTA activities={displayActivities} />}
 
             {/* Daily motivation + streak */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: '12px', alignItems: 'start' }}>
                 <DailyMotivation />
-                <StreakTracker activities={activities} />
+                <StreakTracker activities={displayActivities} />
             </div>
 
             {/* Heatmap */}
             {loading ? <SkeletonChart /> : (
                 <div className="card-dark" style={{ padding: '20px 24px' }}>
                     <div className="card-title" style={{ marginBottom: '16px' }}>Activity Heatmap</div>
-                    <SimpleHeatmap activities={activities} />
+                    <SimpleHeatmap activities={displayActivities} />
                 </div>
             )}
 
@@ -157,22 +223,35 @@ const OverviewTab: React.FC<{
             {/* Recent activity */}
             {loading ? <SkeletonTaskList /> : (
                 <div className="card-dark" style={{ padding: '20px 24px' }}>
-                    <div className="card-title" style={{ marginBottom: '16px' }}>Recent Activity</div>
-                    {activities.length === 0 ? (
-                        <div style={{ textAlign: 'center', padding: '40px 20px' }}>
-                            <div style={{ fontSize: '2rem', marginBottom: '12px', opacity: 0.2 }}>◈</div>
-                            <div style={{ color: '#555', fontSize: '0.9rem' }}>No sessions yet. Add your first activity above.</div>
-                        </div>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
+                        <div className="card-title">Recent Activity</div>
+                        {isNewUser && <span style={{ fontSize: '0.65rem', color: '#444', padding: '2px 8px', borderRadius: '999px', border: '1px solid rgba(255,255,255,0.06)' }}>demo</span>}
+                    </div>
+                    {displayActivities.length === 0 ? (
+                        <motion.div
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            style={{ textAlign: 'center', padding: '40px 20px' }}
+                        >
+                            <div style={{ fontSize: '2rem', marginBottom: '12px', opacity: 0.15 }}>◈</div>
+                            <div style={{ color: '#555', fontSize: '0.875rem', marginBottom: '6px' }}>No sessions yet</div>
+                            <div style={{ color: '#3a3a3a', fontSize: '0.78rem' }}>Use the problem selector above to log your first solve.</div>
+                        </motion.div>
                     ) : (
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                            {activities.slice(0, 8).map(a => (
-                                <div key={a.id} style={{
-                                    display: 'flex', alignItems: 'center', gap: '12px',
-                                    padding: '10px 14px', borderRadius: '10px',
-                                    background: 'rgba(255,255,255,0.02)',
-                                    border: '1px solid rgba(255,255,255,0.04)',
-                                    transition: 'background 0.2s',
-                                }}
+                            {displayActivities.slice(0, 8).map((a, i) => (
+                                <motion.div
+                                    key={a.id}
+                                    initial={{ opacity: 0, x: -12 }}
+                                    animate={{ opacity: 1, x: 0 }}
+                                    transition={{ delay: i * 0.04, duration: 0.28, ease: [0.4, 0, 0.2, 1] }}
+                                    style={{
+                                        display: 'flex', alignItems: 'center', gap: '12px',
+                                        padding: '10px 14px', borderRadius: '10px',
+                                        background: 'rgba(255,255,255,0.02)',
+                                        border: '1px solid rgba(255,255,255,0.04)',
+                                        transition: 'background 0.2s',
+                                    }}
                                     onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = 'rgba(212,175,55,0.04)'}
                                     onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.02)'}
                                 >
@@ -192,12 +271,14 @@ const OverviewTab: React.FC<{
                                             color: a.difficulty === 'Easy' ? '#22c55e' : a.difficulty === 'Medium' ? '#f59e0b' : '#ef4444',
                                         }}>{a.difficulty}</span>
                                     )}
-                                    <button onClick={() => onDeleteActivity(a.id)}
-                                        style={{ background: 'none', border: 'none', color: '#333', cursor: 'pointer', fontSize: '0.8rem', padding: '4px 6px', borderRadius: '4px', transition: 'color 0.2s' }}
-                                        onMouseEnter={e => (e.currentTarget as HTMLElement).style.color = '#ef4444'}
-                                        onMouseLeave={e => (e.currentTarget as HTMLElement).style.color = '#333'}
-                                    >✕</button>
-                                </div>
+                                    {!isNewUser && (
+                                        <button onClick={() => onDeleteActivity(a.id)}
+                                            style={{ background: 'none', border: 'none', color: '#333', cursor: 'pointer', fontSize: '0.8rem', padding: '4px 6px', borderRadius: '4px', transition: 'color 0.2s' }}
+                                            onMouseEnter={e => (e.currentTarget as HTMLElement).style.color = '#ef4444'}
+                                            onMouseLeave={e => (e.currentTarget as HTMLElement).style.color = '#333'}
+                                        >✕</button>
+                                    )}
+                                </motion.div>
                             ))}
                         </div>
                     )}
@@ -348,10 +429,14 @@ const AppContent: React.FC = () => {
                     return <AITab activities={activities} />;
                 case 'roadmap':
                     return <DSARoadmap activities={activities} onAddActivity={handleAddActivity} />;
+                case 'subjects':
+                    return <CoreSubjects />;
                 case 'stats':
                     return <ProgressStats activities={activities} />;
                 case 'badges':
                     return <BadgeSystem activities={activities} />;
+                case 'xp':
+                    return <XPSystem activities={activities} />;
                 case 'resources':
                     return <SolutionResources />;
                 case 'profile':
@@ -362,7 +447,16 @@ const AppContent: React.FC = () => {
                     return null;
             }
         })();
-        return <div key={activeTab} className="page-enter">{content}</div>;
+        return (
+            <motion.div
+                key={activeTab}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.22, ease: [0.4, 0, 0.2, 1] }}
+            >
+                {content}
+            </motion.div>
+        );
     };
 
     return (

@@ -1,41 +1,33 @@
 import React, { useState, useEffect } from 'react';
 import { useGoogleLogin } from '@react-oauth/google';
-import { User } from '../types/auth';
 import { useAuth } from '../contexts/AuthContext';
+import { databaseAPI } from '../api/database';
 import ParticleBackground from './ParticleBackground';
 
 interface LoginProps {
-  onLogin?: (user: User) => void;
+  onLogin?: () => void;
   onBack?: () => void;
 }
 
-/* ── Loading overlay ─────────────────────────────────────────── */
 const LoadingOverlay: React.FC<{ text?: string }> = ({ text = 'Signing in...' }) => (
   <div style={{
     position: 'fixed', inset: 0, zIndex: 1000,
-    background: 'rgba(11,11,11,0.85)',
-    backdropFilter: 'blur(8px)',
+    background: 'rgba(11,11,11,0.85)', backdropFilter: 'blur(8px)',
     display: 'flex', flexDirection: 'column',
     alignItems: 'center', justifyContent: 'center', gap: '20px',
-    animation: 'overlayFadeIn 0.25s ease',
   }}>
     <div style={{
       width: '52px', height: '52px', borderRadius: '50%',
-      border: '3px solid rgba(212,175,55,0.15)',
-      borderTopColor: '#D4AF37',
+      border: '3px solid rgba(212,175,55,0.15)', borderTopColor: '#D4AF37',
       animation: 'spinGold 0.8s linear infinite',
       boxShadow: '0 0 20px rgba(212,175,55,0.3)',
     }} />
-    <span style={{
-      color: '#D4AF37', fontSize: '0.9rem', fontWeight: 500,
-      letterSpacing: '0.08em', opacity: 0.9,
-    }}>
+    <span style={{ color: '#D4AF37', fontSize: '0.9rem', fontWeight: 500, letterSpacing: '0.08em' }}>
       {text}
     </span>
   </div>
 );
 
-/* ── Login ───────────────────────────────────────────────────── */
 const Login: React.FC<LoginProps> = ({ onLogin, onBack }) => {
   const { login } = useAuth();
   const [isLogin, setIsLogin] = useState(true);
@@ -63,36 +55,14 @@ const Login: React.FC<LoginProps> = ({ onLogin, onBack }) => {
     setLoading(true);
 
     try {
-      const endpoint = isLogin ? '/api/login' : '/api/register';
-      const body = isLogin
-        ? { email: email.trim().toLowerCase(), password }
-        : { email: email.trim().toLowerCase(), password, username: username.trim() };
+      const result = isLogin
+        ? await databaseAPI.login(email.trim().toLowerCase(), password)
+        : await databaseAPI.register(email.trim().toLowerCase(), password, username.trim());
 
-      let response: Response;
-      try {
-        response = await fetch(endpoint, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(body),
-        });
-      } catch {
-        throw new Error('Cannot connect to server. Make sure the backend is running.');
-      }
+      if (!result) throw new Error('Authentication failed. Please try again.');
 
-      let data: any;
-      try { data = await response.json(); } catch {
-        throw new Error(`Server returned an invalid response (${response.status})`);
-      }
-      if (!response.ok) throw new Error(data.error || 'Authentication failed');
-
-      const userData: User = {
-        id: data.id,
-        email: data.email,
-        name: data.username,
-        role: data.role as 'admin' | 'user',
-      };
-      login(userData);
-      onLogin?.(userData);
+      login(result);   // passes { user, token } to AuthContext
+      onLogin?.();
     } catch (err: any) {
       setError(err.message || 'Something went wrong. Please try again.');
     } finally {
@@ -103,9 +73,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, onBack }) => {
   const toggleMode = () => {
     setIsLogin(v => !v);
     setError('');
-    setEmail('');
-    setPassword('');
-    setUsername('');
+    setEmail(''); setPassword(''); setUsername('');
   };
 
   const googleLogin = useGoogleLogin({
@@ -114,31 +82,17 @@ const Login: React.FC<LoginProps> = ({ onLogin, onBack }) => {
       setLoading(true);
       setError('');
       try {
-        const res = await fetch('/api/auth/google', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ token: tokenResponse.access_token }),
-        });
-        let data: any;
-        try { data = await res.json(); } catch {
-          throw new Error(`Server Error (${res.status})`);
-        }
-        if (!res.ok) throw new Error(data.error || 'Google login failed');
-        const userData: User = {
-          id: data.id,
-          email: data.email,
-          name: data.username || data.name,
-          role: data.role as 'admin' | 'user',
-        };
-        login(userData);
-        onLogin?.(userData);
+        const result = await databaseAPI.googleAuth(tokenResponse.access_token);
+        if (!result) throw new Error('Google login failed. Please try again.');
+        login(result);
+        onLogin?.();
       } catch (err: any) {
         setError(err.message || 'Google login failed.');
       } finally {
         setLoading(false);
       }
     },
-    onError: () => { setError('Google login failed'); setLoading(false); },
+    onError: () => { setError('Google login was cancelled or failed.'); setLoading(false); },
   });
 
   const inputStyle: React.CSSProperties = {
@@ -155,7 +109,6 @@ const Login: React.FC<LoginProps> = ({ onLogin, onBack }) => {
   return (
     <>
       {loading && <LoadingOverlay text={loadingText} />}
-
       <div style={{
         position: 'fixed', inset: 0, zIndex: 50,
         background: '#0B0B0B',
@@ -163,14 +116,10 @@ const Login: React.FC<LoginProps> = ({ onLogin, onBack }) => {
         overflow: 'hidden',
       }}>
         <ParticleBackground
-          particleCount={45}
-          particleColor="rgba(212,175,55,0.55)"
-          lineColor="rgba(212,175,55,0.08)"
-          particleSpeed={0.25}
-          lineDistance={110}
-          className="z-0"
+          particleCount={45} particleColor="rgba(212,175,55,0.55)"
+          lineColor="rgba(212,175,55,0.08)" particleSpeed={0.25}
+          lineDistance={110} className="z-0"
         />
-
         <div style={{
           position: 'absolute', inset: 0, zIndex: 1,
           background: 'radial-gradient(ellipse at center, rgba(11,11,11,0.6) 0%, rgba(11,11,11,0.88) 100%)',
@@ -193,8 +142,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, onBack }) => {
 
         <div style={{
           position: 'relative', zIndex: 10,
-          width: '100%', maxWidth: '420px',
-          margin: '0 20px',
+          width: '100%', maxWidth: '420px', margin: '0 20px',
           animation: 'cardMount 0.45s cubic-bezier(0.22,1,0.36,1) both',
         }}>
           <div style={{
@@ -202,7 +150,6 @@ const Login: React.FC<LoginProps> = ({ onLogin, onBack }) => {
             background: 'linear-gradient(135deg, rgba(212,175,55,0.25), rgba(212,175,55,0.05), rgba(212,175,55,0.15))',
             filter: 'blur(1px)', zIndex: -1,
           }} />
-
           <div style={{
             background: 'rgba(14,14,14,0.95)',
             border: '1px solid rgba(212,175,55,0.18)',
@@ -286,8 +233,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, onBack }) => {
                 color: '#0B0B0B', fontWeight: 700, fontSize: '0.95rem',
                 cursor: loading ? 'not-allowed' : 'pointer', marginTop: '2px',
                 boxShadow: '0 4px 20px rgba(212,175,55,0.3)',
-                opacity: loading ? 0.7 : 1,
-                fontFamily: 'Inter, sans-serif',
+                opacity: loading ? 0.7 : 1, fontFamily: 'Inter, sans-serif',
               }}>
                 {isLogin ? 'Sign In' : 'Create Account'}
               </button>
