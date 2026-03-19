@@ -4,6 +4,8 @@ import { Sparkles, Brain, TrendingUp, AlertTriangle, Lightbulb, Target, RefreshC
 import { Activity } from '../types';
 import { databaseAPI } from '../api/database';
 import { useAuth } from '../contexts/AuthContext';
+import PremiumGate from './PremiumGate';
+import { usePlan } from '../hooks/usePlan';
 
 interface AIAnalysisProps {
     activities: Activity[];
@@ -41,6 +43,7 @@ function buildLocalStats(activities: Activity[]) {
 
 const AIAnalysis: React.FC<AIAnalysisProps> = ({ activities }) => {
     const { user } = useAuth();
+    const { canUseAI } = usePlan();
     const [result, setResult] = useState<AnalysisResult | null>(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -53,7 +56,6 @@ const AIAnalysis: React.FC<AIAnalysisProps> = ({ activities }) => {
         setLoading(true);
         setError(null);
 
-        // Map frontend activities to the shape the backend expects
         const payload = activities.map(a => ({
             topic: a.dsaTopic || a.category,
             category: a.category,
@@ -86,9 +88,9 @@ const AIAnalysis: React.FC<AIAnalysisProps> = ({ activities }) => {
                 </div>
                 <button
                     onClick={runAnalysis}
-                    disabled={loading || activities.length === 0}
+                    disabled={loading || activities.length === 0 || !canUseAI}
                     className="btn-gold"
-                    style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 20px', fontSize: '0.875rem', opacity: activities.length === 0 ? 0.4 : 1 }}
+                    style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 20px', fontSize: '0.875rem', opacity: (activities.length === 0 || !canUseAI) ? 0.4 : 1 }}
                 >
                     {loading
                         ? <><div className="spinner-gold" style={{ width: '14px', height: '14px', borderWidth: '2px' }} /> Analyzing…</>
@@ -128,8 +130,13 @@ const AIAnalysis: React.FC<AIAnalysisProps> = ({ activities }) => {
                 </div>
             )}
 
+            {/* Plan gate — shown when free user has no quota left */}
+            {!canUseAI && activities.length > 0 && (
+                <PremiumGate feature="AI Progress Analysis" showUsage />
+            )}
+
             {/* Error */}
-            {error && (
+            {error && canUseAI && (
                 <div className="card-dark" style={{ padding: '16px 20px', borderColor: 'rgba(239,68,68,0.3)', display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
                     <AlertTriangle size={16} color="#ef4444" style={{ flexShrink: 0, marginTop: '2px' }} />
                     <p style={{ color: '#ef4444', fontSize: '0.875rem', margin: 0 }}>{error}</p>
