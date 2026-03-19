@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { User, AuthContextType } from '../types/auth';
+import { User, AuthContextType, AuthResponse } from '../types/auth';
 import { SessionManager } from '../utils/sessionManager';
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -9,6 +9,20 @@ export const useAuth = () => {
   if (!ctx) throw new Error('useAuth must be used within an AuthProvider');
   return ctx;
 };
+
+/** Normalize the API user shape → frontend User (maps username → name) */
+function toUser(raw: AuthResponse['user']): User {
+  return {
+    id: raw.id,
+    email: raw.email,
+    name: (raw as any).name ?? raw.username ?? raw.email.split('@')[0],
+    username: raw.username,
+    role: raw.role,
+    plan: raw.plan,
+    aiUsageCount: (raw as any).aiUsageCount,
+    aiUsageResetAt: (raw as any).aiUsageResetAt,
+  };
+}
 
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
@@ -20,20 +34,20 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setIsLoading(false);
   }, []);
 
-  /**
-   * Call after a successful API login/register/google-auth.
-   * Accepts either the new { user, token } shape or a bare User (legacy).
-   */
-  const login = (userOrResponse: User | { user: User; token: string }, token?: string) => {
+  const login = (response: AuthResponse | User, token?: string) => {
     let u: User;
     let t: string;
-    if ('token' in userOrResponse && 'user' in userOrResponse) {
-      u = (userOrResponse as { user: User; token: string }).user;
-      t = (userOrResponse as { user: User; token: string }).token;
+
+    if ('token' in response && 'user' in response) {
+      // New shape: { user, token }
+      u = toUser((response as AuthResponse).user);
+      t = (response as AuthResponse).token;
     } else {
-      u = userOrResponse as User;
+      // Legacy bare User
+      u = response as User;
       t = token ?? SessionManager.getToken() ?? '';
     }
+
     setUser(u);
     SessionManager.saveSession(u, t);
   };
