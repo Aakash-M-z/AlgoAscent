@@ -334,7 +334,7 @@ const AppContent: React.FC = () => {
     const [dataLoading, setDataLoading] = useState(false);
     const [showOnboarding, setShowOnboarding] = useState(false);
     const [showHomePage, setShowHomePage] = useState(false);
-    const [showIntro, setShowIntro] = useState(() => !localStorage.getItem('intro_seen'));
+    const [showIntro, setShowIntro] = useState(true);
 
     // Check onboarding on first auth
     useEffect(() => {
@@ -399,10 +399,7 @@ const AppContent: React.FC = () => {
         return (
             <>
                 {showIntro && (
-                    <IntroScreen onDone={() => {
-                        localStorage.setItem('intro_seen', '1');
-                        setShowIntro(false);
-                    }} />
+                    <IntroScreen onDone={() => setShowIntro(false)} />
                 )}
                 {/* Login fades in underneath as intro fades out */}
                 <div style={{
