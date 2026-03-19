@@ -1,4 +1,5 @@
 import React, { useMemo } from 'react';
+import { motion } from 'framer-motion';
 import { Activity } from '../types';
 
 interface ProgressStatsProps {
@@ -218,10 +219,16 @@ const ProgressStats: React.FC<ProgressStatsProps> = ({ activities }) => {
       )}
 
       {activities.length === 0 && (
-        <div style={{ textAlign: 'center', padding: '80px 20px' }}>
-          <div style={{ fontSize: '3rem', marginBottom: '16px', opacity: 0.15 }}>▦</div>
-          <p style={{ color: '#444', fontSize: '0.9rem' }}>No data yet. Start logging activities to see your stats.</p>
-        </div>
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4 }}
+          style={{ textAlign: 'center', padding: '80px 20px' }}
+        >
+          <div style={{ fontSize: '3rem', marginBottom: '16px', opacity: 0.12 }}>▦</div>
+          <div style={{ color: '#555', fontSize: '0.9rem', marginBottom: '6px' }}>No data yet</div>
+          <div style={{ color: '#3a3a3a', fontSize: '0.78rem' }}>Start logging activities to see your detailed stats here.</div>
+        </motion.div>
       )}
     </div>
   );

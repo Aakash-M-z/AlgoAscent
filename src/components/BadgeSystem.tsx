@@ -1,4 +1,5 @@
 import React, { useMemo } from 'react';
+import { motion } from 'framer-motion';
 import { Activity } from '../types';
 
 interface Props { activities?: Activity[]; }
@@ -20,7 +21,7 @@ const RARITY: Record<string, { color: string; bg: string; label: string }> = {
   legendary: { color: '#D4AF37', bg: 'rgba(212,175,55,0.12)', label: 'Legendary' },
 };
 
-function streak(activities: Activity[]): number {
+function calcStreak(activities: Activity[]): number {
   const dates = [...new Set(activities.map(a => a.date.slice(0, 10)))].sort((a, b) => b > a ? 1 : -1);
   const today = new Date().toISOString().slice(0, 10);
   const yesterday = new Date(Date.now() - 864e5).toISOString().slice(0, 10);
@@ -35,13 +36,13 @@ function streak(activities: Activity[]): number {
 
 const BADGES: Badge[] = [
   { id: 'first', name: 'First Steps', desc: 'Solve your first problem', icon: '🎯', rarity: 'common', points: 10, condition: a => a.filter(x => x.problemSolved).length >= 1 },
-  { id: 'week', name: 'Week Warrior', desc: 'Maintain a 7-day streak', icon: '🔥', rarity: 'rare', points: 50, condition: a => streak(a) >= 7 },
+  { id: 'week', name: 'Week Warrior', desc: 'Maintain a 7-day streak', icon: '🔥', rarity: 'rare', points: 50, condition: a => calcStreak(a) >= 7 },
   { id: 'century', name: 'Century Club', desc: 'Solve 100 problems', icon: '💯', rarity: 'epic', points: 200, condition: a => a.filter(x => x.problemSolved).length >= 100 },
   { id: 'hard', name: 'Hard Crusher', desc: 'Solve 10 Hard problems', icon: '💪', rarity: 'epic', points: 100, condition: a => a.filter(x => x.problemSolved && x.difficulty === 'Hard').length >= 10 },
   { id: 'allround', name: 'All Rounder', desc: 'Solve problems in 10+ categories', icon: '🌈', rarity: 'rare', points: 75, condition: a => new Set(a.filter(x => x.problemSolved).map(x => x.category)).size >= 10 },
   { id: 'speed', name: 'Speed Demon', desc: 'Solve 5 problems in one day', icon: '⚡', rarity: 'rare', points: 60, condition: a => { const m: Record<string, number> = {}; a.forEach(x => { if (x.problemSolved) { const d = x.date.slice(0, 10); m[d] = (m[d] || 0) + 1; } }); return Math.max(0, ...Object.values(m)) >= 5; } },
   { id: 'marathon', name: 'Marathon Runner', desc: 'Spend 100+ hours coding', icon: '🏃', rarity: 'epic', points: 150, condition: a => a.reduce((s, x) => s + x.duration, 0) >= 6000 },
-  { id: 'legend', name: 'Legendary Coder', desc: '30-day streak + 500 problems', icon: '👑', rarity: 'legendary', points: 1000, condition: a => streak(a) >= 30 && a.filter(x => x.problemSolved).length >= 500 },
+  { id: 'legend', name: 'Legendary Coder', desc: '30-day streak + 500 problems', icon: '👑', rarity: 'legendary', points: 1000, condition: a => calcStreak(a) >= 30 && a.filter(x => x.problemSolved).length >= 500 },
 ];
 
 const BadgeSystem: React.FC<Props> = ({ activities = [] }) => {
@@ -89,20 +90,42 @@ const BadgeSystem: React.FC<Props> = ({ activities = [] }) => {
         })}
       </div>
 
+      {/* Empty state */}
+      {activities.length === 0 && (
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4 }}
+          style={{ textAlign: 'center', padding: '32px 20px', borderRadius: '14px', background: 'rgba(212,175,55,0.03)', border: '1px dashed rgba(212,175,55,0.12)' }}
+        >
+          <div style={{ fontSize: '2.5rem', marginBottom: '12px' }}>🏅</div>
+          <div style={{ fontSize: '0.9rem', fontWeight: 600, color: '#555', marginBottom: '6px' }}>No badges yet</div>
+          <div style={{ fontSize: '0.78rem', color: '#3a3a3a' }}>Log your first problem to start earning achievements.</div>
+        </motion.div>
+      )}
+
       {/* Badge grid */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '12px' }}>
-        {BADGES.map(badge => {
+        {BADGES.map((badge, i) => {
           const isEarned = earned.has(badge.id);
           const r = RARITY[badge.rarity];
           return (
-            <div key={badge.id} style={{
-              padding: '20px 16px', borderRadius: '14px', textAlign: 'center',
-              background: isEarned ? r.bg : 'rgba(255,255,255,0.02)',
-              border: `1px solid ${isEarned ? r.color + '50' : 'rgba(255,255,255,0.05)'}`,
-              opacity: isEarned ? 1 : 0.45,
-              transition: 'all 0.25s ease',
-              position: 'relative',
-            }}>
+            <motion.div
+              key={badge.id}
+              initial={{ opacity: 0, y: 16 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: i * 0.04, duration: 0.3, ease: [0.4, 0, 0.2, 1] }}
+              whileHover={isEarned ? { scale: 1.03, y: -2 } : undefined}
+              style={{
+                padding: '20px 16px', borderRadius: '14px', textAlign: 'center',
+                background: isEarned ? r.bg : 'rgba(255,255,255,0.02)',
+                border: `1px solid ${isEarned ? r.color + '50' : 'rgba(255,255,255,0.05)'}`,
+                opacity: isEarned ? 1 : 0.45,
+                transition: 'all 0.25s ease',
+                position: 'relative',
+                cursor: isEarned ? 'default' : 'not-allowed',
+              }}
+            >
               {isEarned && (
                 <div style={{
                   position: 'absolute', top: '-6px', right: '-6px',
@@ -122,7 +145,7 @@ const BadgeSystem: React.FC<Props> = ({ activities = [] }) => {
               <div style={{ fontSize: '0.72rem', fontWeight: 700, color: isEarned ? r.color : '#333' }}>
                 {badge.points} pts
               </div>
-            </div>
+            </motion.div>
           );
         })}
       </div>
