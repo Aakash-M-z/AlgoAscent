@@ -20,6 +20,11 @@ const roleChip = (role: string) =>
     ? <Chip label="admin" color="#D4AF37" bg="rgba(212,175,55,0.12)" />
     : <Chip label="user" color="#818cf8" bg="rgba(129,140,248,0.12)" />;
 
+const planChip = (plan?: string) =>
+  plan === 'premium'
+    ? <Chip label="👑 premium" color="#22c55e" bg="rgba(34,197,94,0.1)" />
+    : <Chip label="free" color="#555" bg="rgba(255,255,255,0.05)" />;
+
 const fmtDate = (d: string | Date) =>
   new Date(d).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' });
 
@@ -52,33 +57,34 @@ const AdminPanel: React.FC = () => {
 
   // Role change modal
   const [roleTarget, setRoleTarget] = useState<SafeUser | null>(null);
+  const [planTarget, setPlanTarget] = useState<SafeUser | null>(null);
 
   const adminId = user?.id ?? '';
 
   /* ── fetchers ─────────────────────────────────────────────── */
   const loadUsers = useCallback(async () => {
     setUsersLoading(true);
-    const data = await databaseAPI.adminGetUsers(adminId);
+    const data = await databaseAPI.adminGetUsers();
     setUsers(data);
     setUsersLoading(false);
-  }, [adminId]);
+  }, []);
 
   const loadActivities = useCallback(async () => {
     setActLoading(true);
-    const data = await databaseAPI.adminGetActivities(adminId, {
+    const data = await databaseAPI.adminGetActivities({
       userId: filterUserId || undefined,
       date: filterDate || undefined,
     });
     setActivities(data);
     setActLoading(false);
-  }, [adminId, filterUserId, filterDate]);
+  }, [filterUserId, filterDate]);
 
   const loadLogs = useCallback(async () => {
     setLogsLoading(true);
-    const data = await databaseAPI.adminGetLogs(adminId);
+    const data = await databaseAPI.adminGetLogs();
     setLogs(data);
     setLogsLoading(false);
-  }, [adminId]);
+  }, []);
 
   // Load on tab switch
   useEffect(() => {
@@ -90,7 +96,7 @@ const AdminPanel: React.FC = () => {
   /* ── actions ──────────────────────────────────────────────── */
   const handleDelete = async (u: SafeUser) => {
     if (!confirm(`Delete user ${u.email}? This cannot be undone.`)) return;
-    const ok = await databaseAPI.adminDeleteUser(adminId, u.id);
+    const ok = await databaseAPI.adminDeleteUser(u.id);
     if (ok) {
       setUsers(prev => prev.filter(x => x.id !== u.id));
       toast(`Deleted ${u.email}`, 'info');
@@ -100,7 +106,7 @@ const AdminPanel: React.FC = () => {
   };
 
   const handleRoleChange = async (u: SafeUser, role: 'admin' | 'user') => {
-    const updated = await databaseAPI.adminChangeRole(adminId, u.id, role);
+    const updated = await databaseAPI.adminChangeRole(u.id, role);
     if (updated) {
       setUsers(prev => prev.map(x => x.id === u.id ? { ...x, role } : x));
       toast(`${u.email} is now ${role}`, 'success');
@@ -110,12 +116,24 @@ const AdminPanel: React.FC = () => {
     setRoleTarget(null);
   };
 
+  const handlePlanChange = async (u: SafeUser, plan: 'free' | 'premium') => {
+    const ok = await databaseAPI.adminChangePlan(u.id, plan);
+    if (ok) {
+      setUsers(prev => prev.map(x => x.id === u.id ? { ...x, plan } as SafeUser : x));
+      toast(`${u.email} plan → ${plan}`, 'success');
+    } else {
+      toast('Failed to change plan', 'error');
+    }
+    setPlanTarget(null);
+  };
+
   /* ── KPIs ─────────────────────────────────────────────────── */
   const kpis = [
     { label: 'Total Users', value: users.length, color: '#D4AF37' },
     { label: 'Admins', value: users.filter(u => u.role === 'admin').length, color: '#f59e0b' },
+    { label: 'Premium', value: users.filter(u => (u as any).plan === 'premium').length, color: '#22c55e' },
     { label: 'Activities', value: activities.length, color: '#818cf8' },
-    { label: 'Audit Logs', value: logs.length, color: '#22c55e' },
+    { label: 'Audit Logs', value: logs.length, color: '#38bdf8' },
   ];
 
   /* ── tab bar ──────────────────────────────────────────────── */
@@ -176,7 +194,7 @@ const AdminPanel: React.FC = () => {
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
                 <thead>
                   <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-                    {['Username', 'Email', 'Role', 'Joined', 'Actions'].map(h => (
+                    {['Username', 'Email', 'Role', 'Plan', 'AI Used', 'Joined', 'Actions'].map(h => (
                       <th key={h} style={{ padding: '10px 16px', textAlign: 'left', color: '#555', fontWeight: 600, whiteSpace: 'nowrap' }}>{h}</th>
                     ))}
                   </tr>
@@ -191,17 +209,27 @@ const AdminPanel: React.FC = () => {
                       <td style={{ padding: '12px 16px', color: '#EAEAEA', fontWeight: 500 }}>{u.username}</td>
                       <td style={{ padding: '12px 16px', color: '#888' }}>{u.email}</td>
                       <td style={{ padding: '12px 16px' }}>{roleChip(u.role)}</td>
+                      <td style={{ padding: '12px 16px' }}>{planChip((u as any).plan)}</td>
+                      <td style={{ padding: '12px 16px', color: '#555', fontSize: '0.75rem' }}>{(u as any).aiUsageCount ?? 0}/day</td>
                       <td style={{ padding: '12px 16px', color: '#555', whiteSpace: 'nowrap' }}>{fmtDate(u.createdAt)}</td>
                       <td style={{ padding: '12px 16px' }}>
                         {u.id !== adminId && (
-                          <div style={{ display: 'flex', gap: '6px' }}>
+                          <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
                             <button
                               onClick={() => setRoleTarget(u)}
                               style={{ padding: '4px 10px', borderRadius: '6px', fontSize: '0.72rem', fontWeight: 600, cursor: 'pointer', background: 'rgba(212,175,55,0.1)', border: '1px solid rgba(212,175,55,0.2)', color: '#D4AF37', transition: 'all 0.15s' }}
                               onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = 'rgba(212,175,55,0.2)'}
                               onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'rgba(212,175,55,0.1)'}
                             >
-                              Change Role
+                              Role
+                            </button>
+                            <button
+                              onClick={() => setPlanTarget(u)}
+                              style={{ padding: '4px 10px', borderRadius: '6px', fontSize: '0.72rem', fontWeight: 600, cursor: 'pointer', background: 'rgba(34,197,94,0.08)', border: '1px solid rgba(34,197,94,0.2)', color: '#22c55e', transition: 'all 0.15s' }}
+                              onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = 'rgba(34,197,94,0.18)'}
+                              onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'rgba(34,197,94,0.08)'}
+                            >
+                              Plan
                             </button>
                             <button
                               onClick={() => handleDelete(u)}
@@ -362,6 +390,30 @@ const AdminPanel: React.FC = () => {
               </button>
             </div>
             <button onClick={() => setRoleTarget(null)}
+              style={{ marginTop: '12px', width: '100%', padding: '8px', borderRadius: '8px', background: 'none', border: '1px solid rgba(255,255,255,0.06)', color: '#555', cursor: 'pointer', fontSize: '0.8rem' }}>
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── Plan change modal ──────────────────────────────────── */}
+      {planTarget && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 500, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setPlanTarget(null)}>
+          <div style={{ background: '#161616', border: '1px solid rgba(34,197,94,0.2)', borderRadius: '16px', padding: '24px', minWidth: '280px' }} onClick={e => e.stopPropagation()}>
+            <div className="card-title" style={{ marginBottom: '6px' }}>Change Plan</div>
+            <div className="kpi-sub" style={{ marginBottom: '20px' }}>{planTarget.email}</div>
+            <div style={{ display: 'flex', gap: '10px' }}>
+              <button onClick={() => handlePlanChange(planTarget, 'free')}
+                style={{ flex: 1, padding: '10px', borderRadius: '10px', fontWeight: 600, fontSize: '0.85rem', cursor: 'pointer', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)', color: '#888', transition: 'all 0.15s' }}>
+                Free
+              </button>
+              <button onClick={() => handlePlanChange(planTarget, 'premium')}
+                style={{ flex: 1, padding: '10px', borderRadius: '10px', fontWeight: 600, fontSize: '0.85rem', cursor: 'pointer', background: 'rgba(34,197,94,0.1)', border: '1px solid rgba(34,197,94,0.25)', color: '#22c55e', transition: 'all 0.15s' }}>
+                👑 Premium
+              </button>
+            </div>
+            <button onClick={() => setPlanTarget(null)}
               style={{ marginTop: '12px', width: '100%', padding: '8px', borderRadius: '8px', background: 'none', border: '1px solid rgba(255,255,255,0.06)', color: '#555', cursor: 'pointer', fontSize: '0.8rem' }}>
               Cancel
             </button>

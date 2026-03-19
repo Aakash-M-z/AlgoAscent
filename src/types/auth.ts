@@ -4,6 +4,9 @@ export interface User {
   name: string;
   username?: string;
   role: 'admin' | 'user';
+  plan: 'free' | 'premium';
+  aiUsageCount?: number;
+  aiUsageResetAt?: string;
 }
 
 export interface AuthState {
@@ -15,4 +18,5 @@ export interface AuthState {
 export interface AuthContextType extends AuthState {
   login: (user: User) => void;
   logout: () => void;
+  updateUser: (partial: Partial<User>) => void;
 }

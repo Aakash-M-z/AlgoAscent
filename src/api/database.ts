@@ -1,180 +1,145 @@
 import { Activity, InsertActivity, User, InsertUser, AdminLog, Task, InsertTask } from '../../shared/schema';
+import { SessionManager } from '../utils/sessionManager';
 
 const API_BASE = import.meta.env.VITE_API_URL || '/api';
 
-// Attach admin id to every admin request
-const adminHeaders = (adminId: string) => ({
-  'Content-Type': 'application/json',
-  'x-admin-id': adminId,
-});
+// ── Header helpers ────────────────────────────────────────────────
+
+function authHeaders(extra?: Record<string, string>): Record<string, string> {
+  const token = SessionManager.getToken();
+  return {
+    'Content-Type': 'application/json',
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    ...extra,
+  };
+}
+
+// ── API response types ────────────────────────────────────────────
+
+export interface AuthResponse {
+  user: Omit<User, 'password'>;
+  token: string;
+}
+
+// ── DatabaseAPI ───────────────────────────────────────────────────
 
 export class DatabaseAPI {
-  // User operations
+
+  // ── Auth ────────────────────────────────────────────────────────
+
+  async login(email: string, password: string): Promise<AuthResponse | null> {
+    try {
+      const res = await fetch(`${API_BASE}/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+      });
+      if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error || `HTTP ${res.status}`); }
+      return res.json();
+    } catch (e) { console.error('login:', e); return null; }
+  }
+
+  async register(email: string, password: string, username: string): Promise<AuthResponse | null> {
+    try {
+      const res = await fetch(`${API_BASE}/register`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password, username }),
+      });
+      if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error || `HTTP ${res.status}`); }
+      return res.json();
+    } catch (e) { console.error('register:', e); return null; }
+  }
+
+  async googleAuth(accessToken: string): Promise<AuthResponse | null> {
+    try {
+      const res = await fetch(`${API_BASE}/auth/google`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: accessToken }),
+      });
+      if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error || `HTTP ${res.status}`); }
+      return res.json();
+    } catch (e) { console.error('googleAuth:', e); return null; }
+  }
+
+  // ── Users ───────────────────────────────────────────────────────
+
   async getUser(id: string | number): Promise<User | null> {
     try {
-      const response = await fetch(`${API_BASE}/users/${id}`);
-      if (!response.ok) return null;
-      return await response.json();
-    } catch (error) {
-      console.error('Error fetching user:', error);
-      return null;
-    }
+      const res = await fetch(`${API_BASE}/users/${id}`, { headers: authHeaders() });
+      if (!res.ok) return null;
+      return res.json();
+    } catch { return null; }
   }
 
   async getUserByUsername(username: string): Promise<User | null> {
     try {
-      const response = await fetch(`${API_BASE}/users/by-username/${username}`);
-      if (!response.ok) return null;
-      return await response.json();
-    } catch (error) {
-      console.error('Error fetching user by username:', error);
-      return null;
-    }
+      const res = await fetch(`${API_BASE}/users/by-username/${username}`, { headers: authHeaders() });
+      if (!res.ok) return null;
+      return res.json();
+    } catch { return null; }
   }
 
   async createUser(userData: InsertUser): Promise<User | null> {
     try {
-      const response = await fetch(`${API_BASE}/register`, {
+      const res = await fetch(`${API_BASE}/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(userData),
       });
-      if (!response.ok) return null;
-      return await response.json();
-    } catch (error) {
-      console.error('Error creating user:', error);
-      return null;
-    }
+      if (!res.ok) return null;
+      const data: AuthResponse = await res.json();
+      return data.user as User;
+    } catch { return null; }
   }
 
-  // Activity operations
+  // ── Activities ──────────────────────────────────────────────────
+
   async getUserActivities(userId: string | number): Promise<Activity[]> {
     try {
-      const response = await fetch(`${API_BASE}/users/${userId}/activities`);
-      if (!response.ok) {
-        console.error(`Failed to fetch activities: ${response.status} ${response.statusText}`);
-        return [];
-      }
-      return await response.json();
-    } catch (error) {
-      console.error('Error fetching activities:', error);
-      return [];
-    }
+      const res = await fetch(`${API_BASE}/users/${userId}/activities`, { headers: authHeaders() });
+      if (!res.ok) { console.error(`Failed to fetch activities: ${res.status}`); return []; }
+      return res.json();
+    } catch (e) { console.error('getUserActivities:', e); return []; }
   }
 
   async createActivity(activityData: InsertActivity): Promise<Activity | null> {
     try {
-      const response = await fetch(`${API_BASE}/activities`, {
+      const res = await fetch(`${API_BASE}/activities`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: authHeaders(),
         body: JSON.stringify(activityData),
       });
-      if (!response.ok) return null;
-      return await response.json();
-    } catch (error) {
-      console.error('Error creating activity:', error);
-      return null;
-    }
+      if (!res.ok) return null;
+      return res.json();
+    } catch { return null; }
   }
 
   async updateActivity(id: string | number, activityData: Partial<Activity>): Promise<Activity | null> {
     try {
-      const response = await fetch(`${API_BASE}/activities/${id}`, {
+      const res = await fetch(`${API_BASE}/activities/${id}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: authHeaders(),
         body: JSON.stringify(activityData),
       });
-      if (!response.ok) return null;
-      return await response.json();
-    } catch (error) {
-      console.error('Error updating activity:', error);
-      return null;
-    }
+      if (!res.ok) return null;
+      return res.json();
+    } catch { return null; }
   }
 
   async deleteActivity(id: string | number): Promise<boolean> {
     try {
-      const response = await fetch(`${API_BASE}/activities/${id}`, {
-        method: 'DELETE',
-      });
-      return response.ok;
-    } catch (error) {
-      console.error('Error deleting activity:', error);
-      return false;
-    }
-  }
-
-  // ── Admin API ──────────────────────────────────────────────────
-
-  async adminGetUsers(adminId: string): Promise<Omit<User, 'password'>[]> {
-    try {
-      const res = await fetch(`${API_BASE}/admin/users`, { headers: adminHeaders(adminId) });
-      if (!res.ok) throw new Error(await res.text());
-      return res.json();
-    } catch (e) {
-      console.error('adminGetUsers:', e);
-      return [];
-    }
-  }
-
-  async adminDeleteUser(adminId: string, userId: string): Promise<boolean> {
-    try {
-      const res = await fetch(`${API_BASE}/admin/users/${userId}`, {
-        method: 'DELETE',
-        headers: adminHeaders(adminId),
-      });
+      const res = await fetch(`${API_BASE}/activities/${id}`, { method: 'DELETE', headers: authHeaders() });
       return res.ok;
-    } catch (e) {
-      console.error('adminDeleteUser:', e);
-      return false;
-    }
+    } catch { return false; }
   }
 
-  async adminChangeRole(adminId: string, userId: string, role: 'admin' | 'user'): Promise<Omit<User, 'password'> | null> {
-    try {
-      const res = await fetch(`${API_BASE}/admin/users/${userId}/role`, {
-        method: 'PATCH',
-        headers: adminHeaders(adminId),
-        body: JSON.stringify({ role }),
-      });
-      if (!res.ok) throw new Error(await res.text());
-      return res.json();
-    } catch (e) {
-      console.error('adminChangeRole:', e);
-      return null;
-    }
-  }
-
-  async adminGetActivities(adminId: string, filters?: { userId?: string; date?: string }): Promise<Activity[]> {
-    try {
-      const params = new URLSearchParams();
-      if (filters?.userId) params.set('userId', filters.userId);
-      if (filters?.date) params.set('date', filters.date);
-      const res = await fetch(`${API_BASE}/admin/activities?${params}`, { headers: adminHeaders(adminId) });
-      if (!res.ok) throw new Error(await res.text());
-      return res.json();
-    } catch (e) {
-      console.error('adminGetActivities:', e);
-      return [];
-    }
-  }
-
-  async adminGetLogs(adminId: string): Promise<AdminLog[]> {
-    try {
-      const res = await fetch(`${API_BASE}/admin/logs`, { headers: adminHeaders(adminId) });
-      if (!res.ok) throw new Error(await res.text());
-      return res.json();
-    } catch (e) {
-      console.error('adminGetLogs:', e);
-      return [];
-    }
-  }
-
-  // ── Task API ───────────────────────────────────────────────────
+  // ── Tasks ───────────────────────────────────────────────────────
 
   async getUserTasks(userId: string): Promise<Task[]> {
     try {
-      const res = await fetch(`${API_BASE}/users/${userId}/tasks`);
+      const res = await fetch(`${API_BASE}/users/${userId}/tasks`, { headers: authHeaders() });
       if (!res.ok) return [];
       return res.json();
     } catch { return []; }
@@ -183,9 +148,7 @@ export class DatabaseAPI {
   async createTask(task: InsertTask): Promise<Task | null> {
     try {
       const res = await fetch(`${API_BASE}/tasks`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(task),
+        method: 'POST', headers: authHeaders(), body: JSON.stringify(task),
       });
       if (!res.ok) return null;
       return res.json();
@@ -195,9 +158,7 @@ export class DatabaseAPI {
   async updateTask(id: string, data: Partial<Task>): Promise<Task | null> {
     try {
       const res = await fetch(`${API_BASE}/tasks/${id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
+        method: 'PATCH', headers: authHeaders(), body: JSON.stringify(data),
       });
       if (!res.ok) return null;
       return res.json();
@@ -206,12 +167,120 @@ export class DatabaseAPI {
 
   async deleteTask(id: string): Promise<boolean> {
     try {
-      const res = await fetch(`${API_BASE}/tasks/${id}`, { method: 'DELETE' });
+      const res = await fetch(`${API_BASE}/tasks/${id}`, { method: 'DELETE', headers: authHeaders() });
       return res.ok;
     } catch { return false; }
   }
 
-  async getRecommendations(activities: import('../../shared/schema').Activity[]): Promise<{
+  // ── Admin ───────────────────────────────────────────────────────
+
+  async adminGetUsers(): Promise<Omit<User, 'password'>[]> {
+    try {
+      const res = await fetch(`${API_BASE}/admin/users`, { headers: authHeaders() });
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    } catch (e) { console.error('adminGetUsers:', e); return []; }
+  }
+
+  async adminDeleteUser(userId: string): Promise<boolean> {
+    try {
+      const res = await fetch(`${API_BASE}/admin/users/${userId}`, { method: 'DELETE', headers: authHeaders() });
+      return res.ok;
+    } catch { return false; }
+  }
+
+  async adminChangeRole(userId: string, role: 'admin' | 'user'): Promise<Omit<User, 'password'> | null> {
+    try {
+      const res = await fetch(`${API_BASE}/admin/users/${userId}/role`, {
+        method: 'PATCH', headers: authHeaders(), body: JSON.stringify({ role }),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    } catch (e) { console.error('adminChangeRole:', e); return null; }
+  }
+
+  async adminChangePlan(userId: string, plan: 'free' | 'premium'): Promise<boolean> {
+    try {
+      const res = await fetch(`${API_BASE}/admin/users/${userId}/plan`, {
+        method: 'PATCH', headers: authHeaders(), body: JSON.stringify({ plan }),
+      });
+      return res.ok;
+    } catch { return false; }
+  }
+
+  async adminGetActivities(filters?: { userId?: string; date?: string }): Promise<Activity[]> {
+    try {
+      const params = new URLSearchParams();
+      if (filters?.userId) params.set('userId', filters.userId);
+      if (filters?.date) params.set('date', filters.date);
+      const res = await fetch(`${API_BASE}/admin/activities?${params}`, { headers: authHeaders() });
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    } catch (e) { console.error('adminGetActivities:', e); return []; }
+  }
+
+  async adminGetLogs(): Promise<AdminLog[]> {
+    try {
+      const res = await fetch(`${API_BASE}/admin/logs`, { headers: authHeaders() });
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    } catch (e) { console.error('adminGetLogs:', e); return []; }
+  }
+
+  // ── AI ──────────────────────────────────────────────────────────
+
+  async analyzeProgress(
+    activities: Activity[],
+    username?: string,
+  ): Promise<{
+    strengths: string[];
+    weaknesses: string[];
+    suggestions: { topic: string; reason: string; priority: 'High' | 'Medium' | 'Low' }[];
+    nextProblems: { name: string; difficulty: 'Easy' | 'Medium' | 'Hard'; topic: string; reason: string }[];
+    overallAssessment: string;
+    nextMilestone: string;
+  } | null> {
+    try {
+      const res = await fetch(`${API_BASE}/ai/analyze`, {
+        method: 'POST',
+        headers: authHeaders(),
+        body: JSON.stringify({ activities, username }),
+      });
+      if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error || `HTTP ${res.status}`); }
+      return res.json();
+    } catch (e) { console.error('analyzeProgress:', e); return null; }
+  }
+
+  async explainTopic(
+    subject: string,
+    topic: string,
+    subtopics: string[],
+    interviewQuestions: string[],
+  ): Promise<{ explanation: string } | null> {
+    try {
+      const res = await fetch(`${API_BASE}/ai/explain-topic`, {
+        method: 'POST',
+        headers: authHeaders(),
+        body: JSON.stringify({ subject, topic, subtopics, interviewQuestions }),
+      });
+      if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error || `HTTP ${res.status}`); }
+      return res.json();
+    } catch (e) { console.error('explainTopic:', e); return null; }
+  }
+
+  async getAiUsage(userId: string): Promise<{
+    plan: string; usageToday: number; limit: number; remaining: number | null;
+  } | null> {
+    try {
+      const res = await fetch(`${API_BASE}/users/${userId}/ai-usage`, { headers: authHeaders() });
+      if (!res.ok) return null;
+      return res.json();
+    } catch { return null; }
+  }
+
+  // ── Recommendations ─────────────────────────────────────────────
+
+  async getRecommendations(activities: Activity[]): Promise<{
     recommendedDifficulty: 'Easy' | 'Medium' | 'Hard';
     difficultyReason: string;
     topicPriority: { topic: string; reason: string; urgency: 'high' | 'medium' | 'low' }[];
@@ -223,48 +292,20 @@ export class DatabaseAPI {
     }>;
   } | null> {
     try {
-      const payload = activities.map(a => ({
-        topic: a.topic || a.category,
+      const payload = (activities as any[]).map((a: any) => ({
+        topic: a.topic || a.category || 'General',
         difficulty: a.difficulty || 'Medium',
-        solved: a.solved,
+        solved: a.solved ?? a.problemSolved ?? false,
         date: typeof a.date === 'string' ? a.date : new Date(a.date).toISOString(),
       }));
       const res = await fetch(`${API_BASE}/recommendations`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: authHeaders(),
         body: JSON.stringify({ activities: payload }),
       });
       if (!res.ok) return null;
       return res.json();
-    } catch (error) {
-      console.error('getRecommendations:', error);
-      return null;
-    }
-  }
-
-  async analyzeProgress(activities: import('../../shared/schema').Activity[], username?: string): Promise<{
-    strengths: string[];
-    weaknesses: string[];
-    suggestions: { topic: string; reason: string; priority: 'High' | 'Medium' | 'Low' }[];
-    nextProblems: { name: string; difficulty: 'Easy' | 'Medium' | 'Hard'; topic: string; reason: string }[];
-    overallAssessment: string;
-    nextMilestone: string;
-  } | null> {
-    try {
-      const res = await fetch(`${API_BASE}/ai/analyze`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ activities, username }),
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.error || `HTTP ${res.status}`);
-      }
-      return res.json();
-    } catch (error) {
-      console.error('analyzeProgress:', error);
-      return null;
-    }
+    } catch (e) { console.error('getRecommendations:', e); return null; }
   }
 }
 
