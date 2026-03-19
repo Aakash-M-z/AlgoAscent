@@ -1,6 +1,6 @@
-import 'dotenv/config';
 import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
+import axios, { AxiosError } from 'axios';
 import { storage } from './storage.js';
 import { InsertUser, InsertActivity, InsertTask } from '../shared/schema.js';
 import { signToken, verifyToken, extractBearer, JwtPayload } from './jwt.js';
@@ -16,7 +16,7 @@ const api = express.Router();
 app.use(cors({
     origin: process.env.FRONTEND_URL || '*',
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'x-admin-id', 'x-user-id'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'x-admin-id', 'x-user-id'],
     credentials: true,
 }));
 app.use(express.json());
@@ -31,15 +31,20 @@ app.use((_req, res, next) => {
 // Health check — returns storage type and env status for easy debugging
 api.get('/health', async (_req, res) => {
     const { mongoConnected } = await import('./mongo-storage.js');
+    const apiKey = process.env.OPENROUTER_API_KEY;
     res.status(200).json({
         status: 'OK',
         timestamp: new Date().toISOString(),
         storage: mongoConnected ? 'mongodb' : 'file',
         env: {
-            openrouter: !!process.env.OPENROUTER_API_KEY,
+            openrouter: apiKey
+                ? `present (${apiKey.slice(0, 12)}...)`
+                : 'MISSING — set OPENROUTER_API_KEY in Vercel dashboard',
+            frontendUrl: process.env.FRONTEND_URL || 'not set',
             mongodb: !!process.env.MONGODB_URI,
             port: process.env.PORT || 3001,
             nodeEnv: process.env.NODE_ENV || 'development',
+            runtime: 'express/vercel',
         },
     });
 });
@@ -500,6 +505,133 @@ api.post('/recommendations', (req, res) => {
     }
 });
 
+// ── OpenRouter shared helper ─────────────────────────────────────
+
+/**
+ * Model chain — tried in order until one succeeds.
+ * gpt-4o-mini is cheap, fast, and highly available on OpenRouter.
+ * mixtral is the fallback for variety.
+ */
+const OR_MODELS = [
+    'openai/gpt-4o-mini',
+    'mistralai/mistral-7b-instruct',
+    'mistralai/mixtral-8x7b-instruct',
+];
+
+const OR_ENDPOINT = 'https://openrouter.ai/api/v1/chat/completions';
+// Use env var so it works on Render, Vercel, and local without hardcoding
+const OR_REFERER = process.env.FRONTEND_URL || process.env.APP_URL || process.env.RENDER_EXTERNAL_URL || 'https://progresss-tracker.vercel.app';
+
+interface ORMessage { role: 'system' | 'user' | 'assistant'; content: string; }
+
+interface ORCallOptions {
+    messages: ORMessage[];
+    temperature?: number;
+    max_tokens?: number;
+    timeoutMs?: number;   // per-attempt timeout
+    retries?: number;     // extra attempts after first failure
+    tag: string;          // log prefix e.g. '[analyze]'
+}
+
+/**
+ * Calls OpenRouter with automatic model fallback + retry.
+ * Returns the raw content string or throws with a `.code` property.
+ */
+async function callOpenRouter(apiKey: string, opts: ORCallOptions): Promise<string> {
+    const {
+        messages, temperature = 0.4, max_tokens = 700,
+        timeoutMs = 20_000, retries = 1, tag,
+    } = opts;
+
+    console.log(`${tag} OpenRouter call — referer=${OR_REFERER} models=${OR_MODELS.join(',')}`);
+
+    let lastErr: any = null;
+
+    for (const model of OR_MODELS) {
+        for (let attempt = 1; attempt <= retries + 1; attempt++) {
+            try {
+                console.log(`${tag} Trying model="${model}" attempt=${attempt}`);
+
+                const response = await axios.post(
+                    OR_ENDPOINT,
+                    { model, messages, temperature, max_tokens },
+                    {
+                        timeout: timeoutMs,
+                        headers: {
+                            'Authorization': `Bearer ${apiKey}`,
+                            'Content-Type': 'application/json',
+                            'HTTP-Referer': OR_REFERER,
+                            'X-Title': 'DSA Progress Tracker',
+                        },
+                    },
+                );
+
+                console.log(`${tag} model="${model}" status=${response.status} usage=${JSON.stringify(response.data?.usage ?? {})}`);
+
+                const content: string = response.data?.choices?.[0]?.message?.content?.trim() ?? '';
+                if (!content) {
+                    console.warn(`${tag} model="${model}" returned empty content — data:`, JSON.stringify(response.data));
+                    const e: any = new Error('Empty content from model');
+                    e.code = 'INVALID_RESPONSE';
+                    throw e;
+                }
+
+                return content; // ✅ success
+
+            } catch (err: any) {
+                lastErr = err;
+
+                // Axios wraps HTTP errors — extract details
+                if (axios.isAxiosError(err)) {
+                    const axErr = err as AxiosError;
+                    const status = axErr.response?.status ?? 0;
+                    const body = JSON.stringify(axErr.response?.data ?? {});
+                    console.error(`${tag} model="${model}" attempt=${attempt} HTTP ${status}: ${body}`);
+
+                    // 401/403 = bad key — no point retrying any model
+                    if (status === 401 || status === 403) {
+                        const e: any = new Error(`OpenRouter auth failed (${status})`);
+                        e.code = 'AUTH_FAILED';
+                        throw e;
+                    }
+
+                    // 429 = rate limit — skip to next model immediately
+                    if (status === 429) {
+                        console.warn(`${tag} model="${model}" rate-limited — trying next model`);
+                        break; // break attempt loop, continue model loop
+                    }
+
+                    // Timeout
+                    if (axErr.code === 'ECONNABORTED' || axErr.message?.includes('timeout')) {
+                        console.warn(`${tag} model="${model}" attempt=${attempt} timed out after ${timeoutMs}ms`);
+                        lastErr = Object.assign(new Error('Timeout'), { code: 'TIMEOUT' });
+                    }
+
+                    // 5xx — retry same model once, then move on
+                    if (status >= 500 && attempt <= retries) {
+                        const delay = attempt * 1000;
+                        console.warn(`${tag} model="${model}" 5xx — retrying in ${delay}ms`);
+                        await new Promise(r => setTimeout(r, delay));
+                        continue;
+                    }
+                } else {
+                    // Non-axios error (e.g. INVALID_RESPONSE from above)
+                    console.error(`${tag} model="${model}" attempt=${attempt} non-HTTP error:`, err?.message);
+                }
+
+                // Move to next model after exhausting retries
+                break;
+            }
+        }
+    }
+
+    // All models exhausted
+    console.error(`${tag} All models failed. Last error:`, lastErr?.message ?? lastErr);
+    const finalErr: any = new Error('All AI models unavailable');
+    finalErr.code = lastErr?.code ?? 'AI_UNAVAILABLE';
+    throw finalErr;
+}
+
 // ── AI Analysis route ────────────────────────────────────────────
 
 api.post('/ai/analyze', checkPlanAccess, async (req, res) => {
@@ -507,12 +639,8 @@ api.post('/ai/analyze', checkPlanAccess, async (req, res) => {
         const authUser = (req as any).authUser;
         const { activities, username } = req.body as {
             activities: Array<{
-                topic: string;
-                difficulty: string;
-                solved: boolean;
-                date: string;
-                timeSpent: number;
-                category: string;
+                topic: string; difficulty: string; solved: boolean;
+                date: string; timeSpent: number; category: string;
             }>;
             username?: string;
         };
@@ -523,14 +651,11 @@ api.post('/ai/analyze', checkPlanAccess, async (req, res) => {
 
         const apiKey = process.env.OPENROUTER_API_KEY;
         if (!apiKey || apiKey === 'your_openrouter_api_key_here') {
-            res.status(501).json({ error: 'OPENROUTER_API_KEY is not configured in .env — AI analysis is disabled' }); return;
+            console.warn('[analyze] OPENROUTER_API_KEY missing');
+            res.status(501).json({ error: 'OPENROUTER_API_KEY is not configured' }); return;
         }
 
-        // Abort if OpenRouter takes too long (15s)
-        const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 15_000);
-
-        // ── Build compact summary (keeps token count low) ──────────
+        // ── Build compact summary ──────────────────────────────────
         const topicMap: Record<string, { solved: number; attempted: number }> = {};
         const diffMap: Record<string, number> = { Easy: 0, Medium: 0, Hard: 0 };
         const dailyMap: Record<string, number> = {};
@@ -552,7 +677,6 @@ api.post('/ai/analyze', checkPlanAccess, async (req, res) => {
             .map(([t, v]) => `${t}: ${v.solved} solved, ${v.attempted} attempted`)
             .join('; ');
 
-        // ── Prompts ────────────────────────────────────────────────
         const systemPrompt =
             'Act as a coding coach. Analyze the user\'s DSA progress and return structured insights. ' +
             'Respond ONLY with a valid JSON object — no markdown, no explanation, no code fences.';
@@ -564,129 +688,53 @@ api.post('/ai/analyze', checkPlanAccess, async (req, res) => {
             `Topics: ${topicSummary}\n\n` +
             `Return this exact JSON shape:\n` +
             `{\n` +
-            `  "strengths": ["<insight>", "<insight>", "<insight>"],\n` +
-            `  "weaknesses": ["<insight>", "<insight>", "<insight>"],\n` +
+            `  "strengths": ["<insight>","<insight>","<insight>"],\n` +
+            `  "weaknesses": ["<insight>","<insight>","<insight>"],\n` +
             `  "suggestions": [\n` +
             `    { "topic": "<topic>", "reason": "<why>", "priority": "High|Medium|Low" },\n` +
             `    { "topic": "<topic>", "reason": "<why>", "priority": "High|Medium|Low" },\n` +
             `    { "topic": "<topic>", "reason": "<why>", "priority": "High|Medium|Low" }\n` +
             `  ],\n` +
             `  "nextProblems": [\n` +
-            `    { "name": "<problem name>", "difficulty": "Easy|Medium|Hard", "topic": "<topic>", "reason": "<why this next>" },\n` +
-            `    { "name": "<problem name>", "difficulty": "Easy|Medium|Hard", "topic": "<topic>", "reason": "<why this next>" },\n` +
-            `    { "name": "<problem name>", "difficulty": "Easy|Medium|Hard", "topic": "<topic>", "reason": "<why this next>" }\n` +
+            `    { "name": "<name>", "difficulty": "Easy|Medium|Hard", "topic": "<topic>", "reason": "<why>" },\n` +
+            `    { "name": "<name>", "difficulty": "Easy|Medium|Hard", "topic": "<topic>", "reason": "<why>" },\n` +
+            `    { "name": "<name>", "difficulty": "Easy|Medium|Hard", "topic": "<topic>", "reason": "<why>" }\n` +
             `  ],\n` +
             `  "overallAssessment": "<2-3 sentence summary>",\n` +
             `  "nextMilestone": "<one concrete goal>"\n` +
             `}`;
 
-        // ── Call OpenRouter ────────────────────────────────────────
-        const orRes = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${apiKey}`,
-                'Content-Type': 'application/json',
-                'HTTP-Referer': 'https://progress-tracker.app',
-                'X-Title': 'DSA Progress Tracker',
-            },
-            body: JSON.stringify({
-                model: 'mistralai/mixtral-8x7b-instruct',
-                messages: [
-                    { role: 'system', content: systemPrompt },
-                    { role: 'user', content: userPrompt },
-                ],
-                temperature: 0.4,
-                max_tokens: 700,
-            }),
-            signal: controller.signal,
+        const raw = await callOpenRouter(apiKey, {
+            messages: [{ role: 'system', content: systemPrompt }, { role: 'user', content: userPrompt }],
+            temperature: 0.4, max_tokens: 700, timeoutMs: 20_000, retries: 1,
+            tag: '[analyze]',
         });
-        clearTimeout(timeout);
 
-        if (!orRes.ok) {
-            const errText = await orRes.text();
-            console.error(`OpenRouter error ${orRes.status}:`, errText);
-            res.status(502).json({ error: `OpenRouter returned ${orRes.status}` }); return;
-        }
-
-        const orData = await orRes.json();
-        const raw: string = orData.choices?.[0]?.message?.content?.trim() ?? '';
-
-        if (!raw) {
-            console.error('OpenRouter returned empty content:', orData);
-            res.status(502).json({ error: 'Empty response from AI model' }); return;
-        }
-
-        // Strip markdown fences if the model wraps output anyway
+        // Strip markdown fences if model wraps output
         const jsonStr = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
-
         let result: unknown;
         try {
             result = JSON.parse(jsonStr);
-        } catch (parseErr) {
-            console.error('JSON parse failed. Raw content:', raw);
+        } catch {
+            console.error('[analyze] JSON parse failed. Raw:', raw);
             res.status(502).json({ error: 'AI returned malformed JSON', raw }); return;
         }
 
-        // Increment usage for free users only
         if (authUser && authUser.role !== 'admin' && authUser.plan !== 'premium') {
             await storage.incrementAiUsage(authUser.id).catch(() => { });
         }
 
         res.json(result);
     } catch (error: any) {
-        console.error('AI analysis error:', error?.message ?? error);
-        if (error?.name === 'AbortError') {
-            res.status(504).json({ error: 'OpenRouter request timed out after 15s' }); return;
-        }
+        console.error('[analyze] Fatal error:', error?.message ?? error);
+        const code = error?.code ?? 'AI_UNAVAILABLE';
+        if (code === 'TIMEOUT') { res.status(504).json({ error: 'AI request timed out' }); return; }
+        if (code === 'AUTH_FAILED') { res.status(502).json({ error: 'OpenRouter authentication failed — check API key' }); return; }
         res.status(500).json({ error: 'Failed to generate analysis' });
     }
 });
 
 // ── AI Explain Topic route ───────────────────────────────────────
-
-/** Call OpenRouter once; returns the explanation string or throws with a code */
-async function callExplainAI(
-    apiKey: string,
-    systemPrompt: string,
-    userPrompt: string,
-    signal: AbortSignal,
-): Promise<string> {
-    const orRes = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-            'Authorization': `Bearer ${apiKey}`,
-            'Content-Type': 'application/json',
-            'HTTP-Referer': 'https://progress-tracker.app',
-            'X-Title': 'DSA Progress Tracker',
-        },
-        body: JSON.stringify({
-            model: 'mistralai/mixtral-8x7b-instruct',
-            messages: [{ role: 'system', content: systemPrompt }, { role: 'user', content: userPrompt }],
-            temperature: 0.5,
-            max_tokens: 600,
-        }),
-        signal,
-    });
-
-    if (!orRes.ok) {
-        const errText = await orRes.text().catch(() => '');
-        console.error(`[explain-topic] OpenRouter ${orRes.status}:`, errText);
-        const err: any = new Error(`OpenRouter returned ${orRes.status}`);
-        err.code = 'AI_UNAVAILABLE';
-        err.status = orRes.status;
-        throw err;
-    }
-
-    const orData = await orRes.json();
-    console.log('[explain-topic] OpenRouter response tokens:', orData.usage);
-    const content = orData?.choices?.[0]?.message?.content?.trim() ?? '';
-    if (!content) {
-        const err: any = new Error('AI returned empty content');
-        err.code = 'INVALID_RESPONSE';
-        throw err;
-    }
-    return content;
-}
 
 api.post('/ai/explain-topic', checkPlanAccess, async (req, res) => {
     try {
@@ -698,7 +746,7 @@ api.post('/ai/explain-topic', checkPlanAccess, async (req, res) => {
 
         const apiKey = process.env.OPENROUTER_API_KEY;
         if (!apiKey || apiKey === 'your_openrouter_api_key_here') {
-            console.warn('[explain-topic] OPENROUTER_API_KEY is missing or not configured');
+            console.warn('[explain-topic] OPENROUTER_API_KEY missing');
             res.status(501).json({ error: 'API_KEY_MISSING', message: 'AI service is not configured' }); return;
         }
 
@@ -707,46 +755,20 @@ api.post('/ai/explain-topic', checkPlanAccess, async (req, res) => {
 
         console.log(`[explain-topic] Request: subject="${subject}" topic="${topic}"`);
 
-        // 10s timeout — abort on first attempt, retry gets a fresh controller
-        let explanation: string | null = null;
-        let lastError: any = null;
-
-        for (let attempt = 1; attempt <= 2; attempt++) {
-            const controller = new AbortController();
-            const timer = setTimeout(() => controller.abort(), 10_000);
-            try {
-                explanation = await callExplainAI(apiKey, systemPrompt, userPrompt, controller.signal);
-                clearTimeout(timer);
-                break; // success
-            } catch (err: any) {
-                clearTimeout(timer);
-                lastError = err;
-                if (err?.name === 'AbortError') {
-                    lastError = Object.assign(new Error('AI request timed out'), { code: 'TIMEOUT' });
-                }
-                // Don't retry on 4xx (client errors) or missing key
-                const status = err?.status ?? 0;
-                if (status >= 400 && status < 500) break;
-                if (attempt < 2) {
-                    console.warn(`[explain-topic] Attempt ${attempt} failed (${lastError.code ?? lastError.message}), retrying in 1s…`);
-                    await new Promise(r => setTimeout(r, 1000));
-                }
-            }
+        let explanation: string;
+        try {
+            explanation = await callOpenRouter(apiKey, {
+                messages: [{ role: 'system', content: systemPrompt }, { role: 'user', content: userPrompt }],
+                temperature: 0.5, max_tokens: 600, timeoutMs: 20_000, retries: 1,
+                tag: '[explain-topic]',
+            });
+        } catch (err: any) {
+            const code: string = err?.code ?? 'AI_UNAVAILABLE';
+            console.error(`[explain-topic] Failed. code=${code}`, err?.message);
+            // Graceful fallback — 200 with fallback flag so frontend shows key points
+            res.status(200).json({ explanation: null, fallback: true, errorCode: code, keyPoints: [] }); return;
         }
 
-        if (!explanation) {
-            const code: string = lastError?.code ?? 'AI_UNAVAILABLE';
-            console.error(`[explain-topic] All attempts failed. code=${code}`, lastError?.message);
-            // Return fallback payload instead of 5xx so frontend can degrade gracefully
-            res.status(200).json({
-                explanation: null,
-                fallback: true,
-                errorCode: code,
-                keyPoints: [], // caller can pass topic.keyPoints if needed
-            }); return;
-        }
-
-        // Increment usage for free users
         if (authUser && authUser.role !== 'admin' && authUser.plan !== 'premium') {
             await storage.incrementAiUsage(authUser.id).catch(() => { });
         }
@@ -754,7 +776,6 @@ api.post('/ai/explain-topic', checkPlanAccess, async (req, res) => {
         console.log(`[explain-topic] Success for "${topic}" (${explanation.length} chars)`);
         res.json({ explanation, fallback: false });
     } catch (error: any) {
-        if (error?.name === 'AbortError') { res.status(504).json({ error: 'TIMEOUT', message: 'AI request timed out' }); return; }
         console.error('[explain-topic] Unexpected error:', error?.message ?? error);
         res.status(500).json({ error: 'AI_UNAVAILABLE', message: 'Failed to generate explanation' });
     }
