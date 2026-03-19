@@ -4,18 +4,20 @@ interface NavItem {
     id: string;
     label: string;
     icon: string;
+    path: string;
 }
 
 interface Props {
     items: NavItem[];
-    activeTab: string;
-    onTabChange: (id: string) => void;
 }
+
+import { NavLink, useLocation } from 'react-router-dom';
 
 const MOBILE_IDS = ['overview', 'tasks', 'analytics', 'roadmap', 'profile'];
 
-const MobileNav: React.FC<Props> = ({ items, activeTab, onTabChange }) => {
+const MobileNav: React.FC<Props> = ({ items }) => {
     const mobileItems = items.filter(i => MOBILE_IDS.includes(i.id));
+    const location = useLocation();
 
     return (
         <nav style={{
@@ -33,11 +35,11 @@ const MobileNav: React.FC<Props> = ({ items, activeTab, onTabChange }) => {
             zIndex: 200,
         }}>
             {mobileItems.map(item => {
-                const active = activeTab === item.id;
+                const active = location.pathname === item.path;
                 return (
-                    <button
+                    <NavLink
                         key={item.id}
-                        onClick={() => onTabChange(item.id)}
+                        to={item.path}
                         style={{
                             flex: 1,
                             display: 'flex',
@@ -86,7 +88,7 @@ const MobileNav: React.FC<Props> = ({ items, activeTab, onTabChange }) => {
                         }}>
                             {item.label}
                         </span>
-                    </button>
+                    </NavLink>
                 );
             })}
         </nav>
