@@ -447,7 +447,7 @@ const AnalyticsDashboard: React.FC<Props> = ({ activities }) => {
                             interval={lineRange === '30' ? 4 : lineRange === '60' ? 3 : 2} />
                         <YAxis tick={{ fill: '#555', fontSize: 10 }} axisLine={false} tickLine={false} allowDecimals={false} />
                         <Tooltip {...tooltipStyle}
-                            formatter={(value: any, name: string) => {
+                            formatter={(value: any, name: any) => {
                                 const labels: Record<string, string> = { solved: 'Solved', attempted: 'Attempted', cumulative: 'Cumulative' };
                                 return [`${value} problems`, labels[name] ?? name];
                             }}

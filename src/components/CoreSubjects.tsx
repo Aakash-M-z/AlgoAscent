@@ -237,7 +237,7 @@ const TopicRow: React.FC<{
                             {/* Notes */}
                             <div>
                                 <div style={{ fontSize: '0.68rem', fontWeight: 700, color: '#444', textTransform: 'uppercase', letterSpacing: '0.12em', marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '6px' }}><FileText size={11} /> Notes</div>
-                                <textarea value={notes} onChange={e => setNotes(e.target.value)} onBlur={() => onSaveNotes(notes)} placeholder="Add your notes here..." rows={3}
+                                <textarea value={notes} onChange={e => setNotes(e.target.value)} placeholder="Add your notes here..." rows={3}
                                     style={{ width: '100%', background: '#0e0e0e', border: '1px solid rgba(255,255,255,0.07)', borderRadius: '8px', color: '#EAEAEA', fontSize: '0.82rem', padding: '10px 12px', resize: 'vertical', outline: 'none', fontFamily: 'Inter, sans-serif', boxSizing: 'border-box', transition: 'border-color 0.2s' }}
                                     onFocus={e => e.currentTarget.style.borderColor = 'rgba(212,175,55,0.4)'}
                                     onBlur={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.07)'; onSaveNotes(notes); }}

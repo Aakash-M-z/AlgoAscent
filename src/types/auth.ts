@@ -9,6 +9,11 @@ export interface User {
   aiUsageResetAt?: string;
 }
 
+export interface AuthResponse {
+  user: Omit<User, 'name'> & { username?: string };
+  token: string;
+}
+
 export interface AuthState {
   user: User | null;
   isAuthenticated: boolean;
@@ -16,7 +21,7 @@ export interface AuthState {
 }
 
 export interface AuthContextType extends AuthState {
-  login: (user: User) => void;
+  login: (response: AuthResponse | User, token?: string) => void;
   logout: () => void;
   updateUser: (partial: Partial<User>) => void;
 }

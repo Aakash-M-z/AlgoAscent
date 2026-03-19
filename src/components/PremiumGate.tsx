@@ -5,7 +5,7 @@ import { usePlan, AI_FREE_DAILY_LIMIT } from '../hooks/usePlan';
 
 interface Props {
     feature?: string;
-    children: React.ReactNode;
+    children?: React.ReactNode;
     /** If true, shows a usage counter instead of a hard lock */
     showUsage?: boolean;
 }

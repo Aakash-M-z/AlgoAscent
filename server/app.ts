@@ -84,8 +84,8 @@ api.post('/register', async (req, res) => {
         if (!(userData as any).aiUsageResetAt) (userData as any).aiUsageResetAt = new Date().toISOString().slice(0, 10);
         const user = await storage.createUser(userData);
         const { password: _, ...safeUser } = user;
-        const token = signToken({ id: user.id, email: user.email, role: user.role, plan: (user as any).plan ?? 'free' });
-        res.status(201).json({ user: safeUser, token });
+        const jwtToken = signToken({ id: user.id, email: user.email, role: user.role, plan: (user as any).plan ?? 'free' });
+        res.status(201).json({ user: safeUser, token: jwtToken });
     } catch (error) {
         console.error('Register error:', error);
         res.status(500).json({ error: 'Server error. Please try again.' });
@@ -95,10 +95,10 @@ api.post('/register', async (req, res) => {
 // Google Auth
 api.post('/auth/google', async (req, res) => {
     try {
-        const { token } = req.body;
-        if (!token) { res.status(400).json({ error: 'Token is required' }); return; }
+        const { token: googleAccessToken } = req.body;
+        if (!googleAccessToken) { res.status(400).json({ error: 'Token is required' }); return; }
         const googleUserRes = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
-            headers: { Authorization: `Bearer ${token}` }
+            headers: { Authorization: `Bearer ${googleAccessToken}` }
         });
         if (!googleUserRes.ok) {
             res.status(401).json({ error: 'Failed to authenticate with Google' }); return;
@@ -126,8 +126,8 @@ api.post('/auth/google', async (req, res) => {
             });
         }
         const { password: _, ...safeUser } = user;
-        const token = signToken({ id: user.id, email: user.email, role: user.role, plan: (user as any).plan ?? 'free' });
-        res.json({ user: safeUser, token });
+        const jwtToken = signToken({ id: user.id, email: user.email, role: user.role, plan: (user as any).plan ?? 'free' });
+        res.json({ user: safeUser, token: jwtToken });
     } catch (error) {
         console.error('Google auth error:', error);
         res.status(500).json({ error: 'Server error. Please try again.' });
