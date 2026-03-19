@@ -256,16 +256,31 @@ export class DatabaseAPI {
     topic: string,
     subtopics: string[],
     interviewQuestions: string[],
-  ): Promise<{ explanation: string } | null> {
-    try {
-      const res = await fetch(`${API_BASE}/ai/explain-topic`, {
-        method: 'POST',
-        headers: authHeaders(),
-        body: JSON.stringify({ subject, topic, subtopics, interviewQuestions }),
-      });
-      if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error || `HTTP ${res.status}`); }
-      return res.json();
-    } catch (e) { console.error('explainTopic:', e); return null; }
+  ): Promise<{ explanation: string | null; fallback?: boolean; errorCode?: string; keyPoints?: string[] }> {
+    const res = await fetch(`${API_BASE}/ai/explain-topic`, {
+      method: 'POST',
+      headers: authHeaders(),
+      body: JSON.stringify({ subject, topic, subtopics, interviewQuestions }),
+    });
+
+    // 403 = plan limit reached — throw with special code
+    if (res.status === 403) {
+      const e = await res.json().catch(() => ({}));
+      const err: any = new Error(e.message || 'AI_LIMIT_REACHED');
+      err.code = 'AI_LIMIT_REACHED';
+      throw err;
+    }
+
+    // Other non-ok statuses
+    if (!res.ok) {
+      const e = await res.json().catch(() => ({}));
+      const err: any = new Error(e.message || e.error || `HTTP ${res.status}`);
+      err.code = e.error || 'AI_UNAVAILABLE';
+      throw err;
+    }
+
+    // 200 — may be a fallback payload (explanation: null, fallback: true)
+    return res.json();
   }
 
   async getAiUsage(userId: string): Promise<{

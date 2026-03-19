@@ -644,6 +644,50 @@ api.post('/ai/analyze', checkPlanAccess, async (req, res) => {
 
 // ── AI Explain Topic route ───────────────────────────────────────
 
+/** Call OpenRouter once; returns the explanation string or throws with a code */
+async function callExplainAI(
+    apiKey: string,
+    systemPrompt: string,
+    userPrompt: string,
+    signal: AbortSignal,
+): Promise<string> {
+    const orRes = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+            'Authorization': `Bearer ${apiKey}`,
+            'Content-Type': 'application/json',
+            'HTTP-Referer': 'https://progress-tracker.app',
+            'X-Title': 'DSA Progress Tracker',
+        },
+        body: JSON.stringify({
+            model: 'mistralai/mixtral-8x7b-instruct',
+            messages: [{ role: 'system', content: systemPrompt }, { role: 'user', content: userPrompt }],
+            temperature: 0.5,
+            max_tokens: 600,
+        }),
+        signal,
+    });
+
+    if (!orRes.ok) {
+        const errText = await orRes.text().catch(() => '');
+        console.error(`[explain-topic] OpenRouter ${orRes.status}:`, errText);
+        const err: any = new Error(`OpenRouter returned ${orRes.status}`);
+        err.code = 'AI_UNAVAILABLE';
+        err.status = orRes.status;
+        throw err;
+    }
+
+    const orData = await orRes.json();
+    console.log('[explain-topic] OpenRouter response tokens:', orData.usage);
+    const content = orData?.choices?.[0]?.message?.content?.trim() ?? '';
+    if (!content) {
+        const err: any = new Error('AI returned empty content');
+        err.code = 'INVALID_RESPONSE';
+        throw err;
+    }
+    return content;
+}
+
 api.post('/ai/explain-topic', checkPlanAccess, async (req, res) => {
     try {
         const authUser = (req as any).authUser;
@@ -654,47 +698,68 @@ api.post('/ai/explain-topic', checkPlanAccess, async (req, res) => {
 
         const apiKey = process.env.OPENROUTER_API_KEY;
         if (!apiKey || apiKey === 'your_openrouter_api_key_here') {
-            res.status(501).json({ error: 'OPENROUTER_API_KEY not configured' }); return;
+            console.warn('[explain-topic] OPENROUTER_API_KEY is missing or not configured');
+            res.status(501).json({ error: 'API_KEY_MISSING', message: 'AI service is not configured' }); return;
         }
 
-        const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 15_000);
-
         const systemPrompt = 'You are a senior software engineer and interview coach. Explain technical topics clearly for placement preparation. Use simple language, concrete examples, and highlight what interviewers actually ask.';
-        const userPrompt = `Subject: ${subject}\nTopic: ${topic}\nSubtopics: ${subtopics.join(', ')}\n\nProvide a clear, structured explanation (3-5 paragraphs) covering:\n1. Core concept in simple terms\n2. How it works (with a brief example)\n3. Why it matters in interviews\n4. Common mistakes to avoid\n\nBe concise and practical. No markdown headers — use plain paragraphs.`;
+        const userPrompt = `Subject: ${subject}\nTopic: ${topic}\nSubtopics: ${subtopics?.join(', ') ?? ''}\n\nProvide a clear, structured explanation (3-5 paragraphs) covering:\n1. Core concept in simple terms\n2. How it works (with a brief example)\n3. Why it matters in interviews\n4. Common mistakes to avoid\n\nBe concise and practical. No markdown headers — use plain paragraphs.`;
 
-        const orRes = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${apiKey}`,
-                'Content-Type': 'application/json',
-                'HTTP-Referer': 'https://progress-tracker.app',
-                'X-Title': 'DSA Progress Tracker',
-            },
-            body: JSON.stringify({
-                model: 'mistralai/mixtral-8x7b-instruct',
-                messages: [{ role: 'system', content: systemPrompt }, { role: 'user', content: userPrompt }],
-                temperature: 0.5,
-                max_tokens: 600,
-            }),
-            signal: controller.signal,
-        });
-        clearTimeout(timeout);
+        console.log(`[explain-topic] Request: subject="${subject}" topic="${topic}"`);
 
-        if (!orRes.ok) { res.status(502).json({ error: `OpenRouter returned ${orRes.status}` }); return; }
-        const orData = await orRes.json();
-        const explanation = orData.choices?.[0]?.message?.content?.trim() ?? '';
-        if (!explanation) { res.status(502).json({ error: 'Empty response from AI' }); return; }
+        // 10s timeout — abort on first attempt, retry gets a fresh controller
+        let explanation: string | null = null;
+        let lastError: any = null;
+
+        for (let attempt = 1; attempt <= 2; attempt++) {
+            const controller = new AbortController();
+            const timer = setTimeout(() => controller.abort(), 10_000);
+            try {
+                explanation = await callExplainAI(apiKey, systemPrompt, userPrompt, controller.signal);
+                clearTimeout(timer);
+                break; // success
+            } catch (err: any) {
+                clearTimeout(timer);
+                lastError = err;
+                if (err?.name === 'AbortError') {
+                    lastError = Object.assign(new Error('AI request timed out'), { code: 'TIMEOUT' });
+                }
+                // Don't retry on 4xx (client errors) or missing key
+                const status = err?.status ?? 0;
+                if (status >= 400 && status < 500) break;
+                if (attempt < 2) {
+                    console.warn(`[explain-topic] Attempt ${attempt} failed (${lastError.code ?? lastError.message}), retrying in 1s…`);
+                    await new Promise(r => setTimeout(r, 1000));
+                }
+            }
+        }
+
+        if (!explanation) {
+            const code: string = lastError?.code ?? 'AI_UNAVAILABLE';
+            console.error(`[explain-topic] All attempts failed. code=${code}`, lastError?.message);
+            // Return fallback payload instead of 5xx so frontend can degrade gracefully
+            res.status(200).json({
+                explanation: null,
+                fallback: true,
+                errorCode: code,
+                keyPoints: [], // caller can pass topic.keyPoints if needed
+            }); return;
+        }
+
+        // Increment usage for free users
         if (authUser && authUser.role !== 'admin' && authUser.plan !== 'premium') {
             await storage.incrementAiUsage(authUser.id).catch(() => { });
         }
-        res.json({ explanation });
+
+        console.log(`[explain-topic] Success for "${topic}" (${explanation.length} chars)`);
+        res.json({ explanation, fallback: false });
     } catch (error: any) {
-        if (error?.name === 'AbortError') { res.status(504).json({ error: 'AI request timed out' }); return; }
-        console.error('explain-topic error:', error);
-        res.status(500).json({ error: 'Failed to generate explanation' });
+        if (error?.name === 'AbortError') { res.status(504).json({ error: 'TIMEOUT', message: 'AI request timed out' }); return; }
+        console.error('[explain-topic] Unexpected error:', error?.message ?? error);
+        res.status(500).json({ error: 'AI_UNAVAILABLE', message: 'Failed to generate explanation' });
     }
 });
+
 // ── Admin routes ─────────────────────────────────────────────────
 
 // GET all users
