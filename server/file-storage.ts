@@ -193,4 +193,17 @@ export class FileStorage implements IStorage {
         if (deleted) this.saveData();
         return deleted;
     }
+
+    async incrementAiUsage(userId: string | number): Promise<User | undefined> {
+        const strId = userId.toString();
+        const user = this.users.get(strId);
+        if (!user) return undefined;
+        const today = new Date().toISOString().slice(0, 10);
+        const resetAt = (user as any).aiUsageResetAt ?? today;
+        const count = resetAt === today ? ((user as any).aiUsageCount ?? 0) + 1 : 1;
+        const updated = { ...user, aiUsageCount: count, aiUsageResetAt: today } as User;
+        this.users.set(strId, updated);
+        this.saveData();
+        return updated;
+    }
 }

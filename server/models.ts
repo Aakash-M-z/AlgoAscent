@@ -5,6 +5,9 @@ const userSchema = new Schema({
     email: { type: String, required: true, unique: true },
     password: { type: String, required: true },
     role: { type: String, default: 'user', required: true },
+    plan: { type: String, default: 'free', required: true },
+    aiUsageCount: { type: Number, default: 0 },
+    aiUsageResetAt: { type: String, default: () => new Date().toISOString().slice(0, 10) },
     createdAt: { type: Date, default: Date.now }
 });
 

@@ -3,7 +3,10 @@ export interface User {
   username: string;
   email: string;
   password: string;
-  role: string;
+  role: 'admin' | 'user';
+  plan: 'free' | 'premium';
+  aiUsageCount: number;       // resets daily
+  aiUsageResetAt: string;     // ISO date string of last reset
   createdAt: Date;
 }
 
