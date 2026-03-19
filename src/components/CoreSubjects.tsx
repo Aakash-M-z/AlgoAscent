@@ -1,9 +1,15 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Brain, BookOpen, Network, Cpu, ChevronDown, ChevronRight, CheckCircle, Circle, FileText, RotateCcw, Sparkles, X, Lock } from 'lucide-react';
+import { Brain, BookOpen, Network, Cpu, ChevronDown, ChevronRight, CheckCircle, Circle, FileText, RotateCcw, Sparkles, X, Lock, RefreshCw } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { usePlan } from '../hooks/usePlan';
 import { databaseAPI } from '../api/database';
+import { ExplainSkeleton } from './AISkeleton';
+import {
+    getCached, setCached, getCacheInfo, invalidateCache,
+    trackRequest, trackCacheHit, trackSuccess, trackFailure,
+    buildExplainCacheKey,
+} from '../utils/aiCache';
 
 /* ── Types ─────────────────────────────────────────────────── */
 export interface SubjectTopic {
@@ -105,42 +111,120 @@ function saveProgress(p: Record<string, SubjectProgress>) {
 
 /* ── AI Explain Modal ──────────────────────────────────────── */
 const AIExplainModal: React.FC<{ topic: SubjectTopic; subject: Subject; onClose: () => void }> = ({ topic, subject, onClose }) => {
-    const { user } = useAuth();
-    const { canUseAI, aiRemaining, isPremium } = usePlan();
-    const [loading, setLoading] = useState(false);
-    const [explanation, setExplanation] = useState('');
-    const [error, setError] = useState('');
-    const [limitReached, setLimitReached] = useState(!canUseAI);
+    const { canUseAI, isPremium } = usePlan();
+    const cacheKey = buildExplainCacheKey(subject.name, topic.title);
 
-    const explain = useCallback(async () => {
+    const [loading, setLoading] = useState(false);
+    const [explanation, setExplanation] = useState(() => getCached<string>('explain', cacheKey) ?? '');
+    const [error, setError] = useState('');
+    const [isFallback, setIsFallback] = useState(false);
+    const [limitReached, setLimitReached] = useState(!canUseAI);
+    const [fromCache, setFromCache] = useState(() => !!getCached<string>('explain', cacheKey));
+    const [cacheAge] = useState(() => getCacheInfo('explain', cacheKey)?.age ?? null);
+    const inFlight = React.useRef(false);
+
+    // Map backend error codes to user-friendly messages
+    function friendlyError(code?: string): string {
+        switch (code) {
+            case 'TIMEOUT': return '⚠️ AI is taking too long. Showing key points instead.';
+            case 'AI_UNAVAILABLE': return '⚠️ AI is temporarily unavailable. Please try again.';
+            case 'INVALID_RESPONSE': return '⚠️ AI returned an unexpected response. Please try again.';
+            case 'API_KEY_MISSING': return '⚠️ AI service is not configured on the server.';
+            default: return '⚠️ AI is temporarily unavailable. Please try again.';
+        }
+    }
+
+    const explain = useCallback(async (forceRefresh = false) => {
         if (!canUseAI && !isPremium) { setLimitReached(true); return; }
-        setLoading(true); setError(''); setExplanation('');
+        if (inFlight.current) return; // prevent duplicate requests
+
+        // Serve from cache unless forced
+        if (!forceRefresh) {
+            const cached = getCached<string>('explain', cacheKey);
+            if (cached) {
+                setExplanation(cached);
+                setFromCache(true);
+                setIsFallback(false);
+                trackCacheHit();
+                return;
+            }
+        }
+
+        inFlight.current = true;
+        setLoading(true); setError(''); setFromCache(false); setIsFallback(false);
+        trackRequest();
+        const t0 = Date.now();
+
         try {
             const data = await databaseAPI.explainTopic(subject.name, topic.title, topic.subtopics, topic.interviewQuestions);
-            if (!data) throw new Error('Failed to get AI explanation');
-            setExplanation(data.explanation || '');
-        } catch (e: any) {
-            if (e.message === 'AI_LIMIT_REACHED') { setLimitReached(true); return; }
-            setError(e.message || 'Failed to get AI explanation');
-        }
-        finally { setLoading(false); }
-    }, [topic, subject, canUseAI, isPremium]);
+            const duration = Date.now() - t0;
 
-    React.useEffect(() => { if (canUseAI || isPremium) explain(); }, []);
+            if (data.fallback || !data.explanation) {
+                // Backend returned fallback — show key points prominently
+                setIsFallback(true);
+                setExplanation('');
+                setError(friendlyError(data.errorCode));
+                trackFailure({ feature: 'explain', error: data.errorCode ?? 'fallback', durationMs: duration });
+            } else {
+                setExplanation(data.explanation);
+                setCached('explain', cacheKey, data.explanation);
+                setIsFallback(false);
+                trackSuccess(duration);
+            }
+        } catch (e: any) {
+            const duration = Date.now() - t0;
+            if (e.code === 'AI_LIMIT_REACHED') { setLimitReached(true); inFlight.current = false; return; }
+            setError(friendlyError(e.code));
+            setIsFallback(true); // show key points as fallback
+            trackFailure({ feature: 'explain', error: e.code || e.message || 'unknown', durationMs: duration });
+        } finally {
+            setLoading(false);
+            inFlight.current = false;
+        }
+    }, [topic, subject, cacheKey, canUseAI, isPremium]);
+
+    // Auto-fetch on open if no cache
+    React.useEffect(() => {
+        if (!explanation && (canUseAI || isPremium)) explain();
+    }, []);
+
+    const handleForceRefresh = () => {
+        if (loading) return;
+        invalidateCache('explain', cacheKey);
+        explain(true);
+    };
+
+    function fmtAge(ms: number): string {
+        const m = Math.floor(ms / 60000);
+        if (m < 60) return `${m}m ago`;
+        const h = Math.floor(m / 60);
+        return h < 24 ? `${h}h ago` : `${Math.floor(h / 24)}d ago`;
+    }
 
     return (
         <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 200, background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
             <motion.div onClick={e => e.stopPropagation()} initial={{ opacity: 0, scale: 0.92, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95 }} transition={{ type: 'spring', stiffness: 350, damping: 28 }}
                 style={{ background: '#111', border: '1px solid rgba(212,175,55,0.3)', borderRadius: '20px', padding: '28px', width: '100%', maxWidth: '680px', maxHeight: '80vh', overflow: 'hidden', display: 'flex', flexDirection: 'column', boxShadow: '0 32px 80px rgba(0,0,0,0.8), 0 0 40px rgba(212,175,55,0.08)' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '20px', flexShrink: 0 }}>
+
+                {/* Header */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px', flexShrink: 0 }}>
                     <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: subject.bg, border: `1px solid ${subject.color}30`, display: 'flex', alignItems: 'center', justifyContent: 'center', color: subject.color }}><Sparkles size={16} /></div>
                     <div style={{ flex: 1 }}>
                         <div style={{ fontSize: '0.7rem', color: subject.color, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em' }}>{subject.name}</div>
                         <div style={{ fontSize: '1rem', fontWeight: 700, color: '#EAEAEA' }}>{topic.title}</div>
                     </div>
-                    <button onClick={onClose} style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '8px', padding: '6px 10px', color: '#555', cursor: 'pointer', transition: 'color 0.2s' }} onMouseEnter={e => (e.currentTarget as HTMLElement).style.color = '#ef4444'} onMouseLeave={e => (e.currentTarget as HTMLElement).style.color = '#555'}><X size={14} /></button>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        {fromCache && cacheAge !== null && (
+                            <button onClick={handleForceRefresh} disabled={loading} title="Refresh from AI" style={{ display: 'flex', alignItems: 'center', gap: '4px', background: 'rgba(212,175,55,0.06)', border: '1px solid rgba(212,175,55,0.15)', borderRadius: '7px', padding: '4px 8px', color: '#D4AF37', cursor: loading ? 'not-allowed' : 'pointer', fontSize: '0.68rem', opacity: loading ? 0.5 : 1 }}>
+                                <RefreshCw size={10} /> {fmtAge(cacheAge)}
+                            </button>
+                        )}
+                        <button onClick={onClose} style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '8px', padding: '6px 10px', color: '#555', cursor: 'pointer', transition: 'color 0.2s' }} onMouseEnter={e => (e.currentTarget as HTMLElement).style.color = '#ef4444'} onMouseLeave={e => (e.currentTarget as HTMLElement).style.color = '#555'}><X size={14} /></button>
+                    </div>
                 </div>
+
                 <div style={{ flex: 1, overflowY: 'auto' }}>
+                    {/* Limit reached */}
                     {limitReached && (
                         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '32px 20px', gap: '12px', textAlign: 'center' }}>
                             <div style={{ width: '48px', height: '48px', borderRadius: '14px', background: 'rgba(212,175,55,0.1)', border: '1px solid rgba(212,175,55,0.25)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -148,30 +232,43 @@ const AIExplainModal: React.FC<{ topic: SubjectTopic; subject: Subject; onClose:
                             </div>
                             <div style={{ fontSize: '0.95rem', fontWeight: 700, color: '#EAEAEA' }}>Daily AI limit reached</div>
                             <div style={{ fontSize: '0.8rem', color: '#555', lineHeight: 1.6 }}>Free plan allows 2 AI requests/day. Resets at midnight.</div>
-                            <div style={{ padding: '8px 18px', borderRadius: '10px', background: 'rgba(212,175,55,0.08)', border: '1px solid rgba(212,175,55,0.2)', fontSize: '0.78rem', color: '#D4AF37', fontWeight: 600 }}>👑 Premium coming soon — unlimited AI</div>
+                            <div style={{ padding: '8px 18px', borderRadius: '10px', background: 'rgba(212,175,55,0.08)', border: '1px solid rgba(212,175,55,0.2)', fontSize: '0.78rem', color: '#D4AF37', fontWeight: 600 }}>👑 Upgrade to Premium for unlimited AI</div>
                         </div>
                     )}
-                    {!limitReached && loading && (
-                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '40px 20px', gap: '16px' }}>
-                            <div className="spinner-gold" />
-                            <div style={{ fontSize: '0.85rem', color: '#555' }}>AI is analyzing this topic...</div>
+
+                    {/* Loading skeleton */}
+                    <AnimatePresence>
+                        {!limitReached && loading && <ExplainSkeleton />}
+                    </AnimatePresence>
+
+                    {/* Error / fallback banner */}
+                    {!limitReached && !loading && error && (
+                        <div style={{ padding: '12px 16px', borderRadius: '12px', background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.2)', color: '#f59e0b', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '10px', marginBottom: isFallback ? '16px' : 0 }}>
+                            <span style={{ flex: 1 }}>{error}</span>
+                            <button
+                                onClick={() => explain(true)}
+                                disabled={loading}
+                                style={{ color: '#D4AF37', background: 'none', border: 'none', cursor: loading ? 'not-allowed' : 'pointer', fontWeight: 600, fontSize: '0.85rem', flexShrink: 0, opacity: loading ? 0.5 : 1 }}
+                            >Retry</button>
                         </div>
                     )}
-                    {!limitReached && error && (
-                        <div style={{ padding: '16px', borderRadius: '12px', background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', color: '#ef4444', fontSize: '0.85rem' }}>
-                            {error}
-                            <button onClick={explain} style={{ marginLeft: '12px', color: '#D4AF37', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600, fontSize: '0.85rem' }}>Retry</button>
-                        </div>
-                    )}
-                    {!limitReached && explanation && (
+
+                    {/* Explanation */}
+                    {!limitReached && !loading && explanation && (
                         <div style={{ fontSize: '0.9rem', color: '#BDBDBD', lineHeight: 1.75, whiteSpace: 'pre-wrap' }}>{explanation}</div>
                     )}
-                    {/* Always show key points + interview Qs */}
+
+                    {/* Key points + interview Qs — always shown; more prominent on fallback */}
                     {!loading && !limitReached && (
-                        <div style={{ marginTop: '24px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                            <div style={{ padding: '16px', borderRadius: '12px', background: 'rgba(212,175,55,0.05)', border: '1px solid rgba(212,175,55,0.15)' }}>
+                        <div style={{ marginTop: explanation ? '24px' : '4px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                            {isFallback && (
+                                <div style={{ padding: '4px 0 8px', fontSize: '0.75rem', color: '#555', fontStyle: 'italic' }}>
+                                    Showing offline reference material while AI is unavailable.
+                                </div>
+                            )}
+                            <div style={{ padding: '16px', borderRadius: '12px', background: isFallback ? 'rgba(212,175,55,0.08)' : 'rgba(212,175,55,0.05)', border: `1px solid rgba(212,175,55,${isFallback ? '0.25' : '0.15'})` }}>
                                 <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#D4AF37', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '10px' }}>Key Points</div>
-                                {topic.keyPoints.map((p, i) => <div key={i} style={{ fontSize: '0.82rem', color: '#999', marginBottom: '6px', paddingLeft: '12px', borderLeft: '2px solid rgba(212,175,55,0.3)' }}>{p}</div>)}
+                                {topic.keyPoints.map((p, i) => <div key={i} style={{ fontSize: '0.82rem', color: isFallback ? '#BDBDBD' : '#999', marginBottom: '6px', paddingLeft: '12px', borderLeft: '2px solid rgba(212,175,55,0.3)' }}>{p}</div>)}
                             </div>
                             <div style={{ padding: '16px', borderRadius: '12px', background: 'rgba(167,139,250,0.05)', border: '1px solid rgba(167,139,250,0.15)' }}>
                                 <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#a78bfa', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '10px' }}>Interview Questions</div>
