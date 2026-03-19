@@ -41,6 +41,8 @@ import NextProblemCTA from './components/NextProblemCTA';
 import CoreSubjects from './components/CoreSubjects';
 import XPSystem from './components/XPSystem';
 import { motion, AnimatePresence } from 'framer-motion';
+import { NavLink, useLocation } from 'react-router-dom';
+import AppRoutes from './routes/AppRoutes';
 
 /* ── Demo activities shown to new users ───────────────────────── */
 const DEMO_ACTIVITIES: Activity[] = (() => {
@@ -70,29 +72,27 @@ const DEMO_ACTIVITIES: Activity[] = (() => {
 })();
 
 const NAV_ITEMS = [
-    { id: 'overview', label: 'Overview', icon: '⊞', section: 'main' },
-    { id: 'tasks', label: 'Tasks', icon: '✓', section: 'main' },
-    { id: 'analytics', label: 'Analytics', icon: '◐', section: 'main' },
-    { id: 'ai', label: 'AI Assistant', icon: '◈', section: 'main' },
-    { id: 'roadmap', label: 'DSA Roadmap', icon: '◎', section: 'tools' },
-    { id: 'subjects', label: 'Core Subjects', icon: '⬡', section: 'tools' },
-    { id: 'stats', label: 'Statistics', icon: '▦', section: 'tools' },
-    { id: 'badges', label: 'Badges', icon: '◆', section: 'tools' },
-    { id: 'xp', label: 'XP & Levels', icon: '★', section: 'tools' },
-    { id: 'resources', label: 'Resources', icon: '◇', section: 'tools' },
-    { id: 'profile', label: 'Profile', icon: '◉', section: 'account' },
+    { id: 'overview', label: 'Overview', icon: '⊞', section: 'main', path: '/' },
+    { id: 'tasks', label: 'Tasks', icon: '✓', section: 'main', path: '/tasks' },
+    { id: 'analytics', label: 'Analytics', icon: '◐', section: 'main', path: '/analytics' },
+    { id: 'ai', label: 'AI Assistant', icon: '◈', section: 'main', path: '/ai' },
+    { id: 'roadmap', label: 'DSA Roadmap', icon: '◎', section: 'tools', path: '/roadmap' },
+    { id: 'subjects', label: 'Core Subjects', icon: '⬡', section: 'tools', path: '/subjects' },
+    { id: 'stats', label: 'Statistics', icon: '▦', section: 'tools', path: '/statistics' },
+    { id: 'badges', label: 'Badges', icon: '◆', section: 'tools', path: '/badges' },
+    { id: 'xp', label: 'XP & Levels', icon: '★', section: 'tools', path: '/xp' },
+    { id: 'resources', label: 'Resources', icon: '◇', section: 'tools', path: '/resources' },
+    { id: 'profile', label: 'Profile', icon: '◉', section: 'account', path: '/profile' },
 ] as const;
 
 type TabId = typeof NAV_ITEMS[number]['id'] | 'admin';
 
 /* ── Sidebar ─────────────────────────────────────────────────── */
 const Sidebar: React.FC<{
-    tabs: { id: string; label: string; icon: string; section: string }[];
-    activeTab: string;
-    onTabChange: (id: string) => void;
+    tabs: { id: string; label: string; icon: string; section: string; path: string }[];
     collapsed: boolean;
     onToggle: () => void;
-}> = ({ tabs, activeTab, onTabChange, collapsed, onToggle }) => {
+}> = ({ tabs, collapsed, onToggle }) => {
     const sections = [
         { key: 'main', label: 'Main' },
         { key: 'tools', label: 'Tools' },
@@ -136,13 +136,17 @@ const Sidebar: React.FC<{
                                 </div>
                             )}
                             {items.map(tab => (
-                                <button key={tab.id} onClick={() => onTabChange(tab.id)} title={collapsed ? tab.label : undefined}
-                                    className={`sidebar-item ${activeTab === tab.id ? 'active' : ''}`}
+                                <NavLink key={tab.id} to={tab.path} title={collapsed ? tab.label : undefined}
+                                    className={({ isActive }) => `sidebar-item ${isActive ? 'active' : ''}`}
                                     style={{ justifyContent: collapsed ? 'center' : 'flex-start', padding: collapsed ? '10px' : '9px 12px', marginBottom: '1px' }}
                                 >
-                                    <span style={{ fontSize: '0.9rem', flexShrink: 0, lineHeight: 1, opacity: activeTab === tab.id ? 1 : 0.7 }}>{tab.icon}</span>
-                                    {!collapsed && <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontSize: '0.84rem' }}>{tab.label}</span>}
-                                </button>
+                                    {({ isActive }) => (
+                                        <>
+                                            <span style={{ fontSize: '0.9rem', flexShrink: 0, lineHeight: 1, opacity: isActive ? 1 : 0.7 }}>{tab.icon}</span>
+                                            {!collapsed && <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontSize: '0.84rem' }}>{tab.label}</span>}
+                                        </>
+                                    )}
+                                </NavLink>
                             ))}
                             {!collapsed && <div style={{ height: '1px', background: 'rgba(255,255,255,0.03)', margin: '8px 4px' }} />}
                         </div>
@@ -328,7 +332,6 @@ const AppContent: React.FC = () => {
     const { user, isAuthenticated, isLoading: authLoading } = useAuth();
     const { toast } = useToast();
 
-    const [activeTab, setActiveTab] = useState<string>('overview');
     const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
     const [activities, setActivities] = useState<Activity[]>([]);
     const [dataLoading, setDataLoading] = useState(false);
@@ -381,8 +384,8 @@ const AppContent: React.FC = () => {
     }, [activities, toast]);
 
     const navItems = useMemo(() => {
-        const items = [...NAV_ITEMS] as { id: string; label: string; icon: string; section: string }[];
-        if (user?.role === 'admin') items.push({ id: 'admin', label: 'Admin', icon: '⚙', section: 'account' });
+        const items = [...NAV_ITEMS] as { id: string; label: string; icon: string; section: string; path: string }[];
+        if (user?.role === 'admin') items.push({ id: 'admin', label: 'Admin', icon: '⚙', section: 'account', path: '/admin' });
         return items;
     }, [user]);
 
@@ -413,66 +416,28 @@ const AppContent: React.FC = () => {
         );
     }
 
-    const renderTab = () => {
-        const content = (() => {
-            switch (activeTab) {
-                case 'overview':
-                    return <OverviewTab activities={activities} loading={dataLoading} onAddActivity={handleAddActivity} onDeleteActivity={handleDeleteActivity} />;
-                case 'tasks':
-                    return <TaskManager />;
-                case 'analytics':
-                    return <AnalyticsDashboard activities={activities} />;
-                case 'ai':
-                    return <AITab activities={activities} />;
-                case 'roadmap':
-                    return <DSARoadmap activities={activities} onAddActivity={handleAddActivity} />;
-                case 'subjects':
-                    return <CoreSubjects />;
-                case 'stats':
-                    return <ProgressStats activities={activities} />;
-                case 'badges':
-                    return <BadgeSystem activities={activities} />;
-                case 'xp':
-                    return <XPSystem activities={activities} />;
-                case 'resources':
-                    return <SolutionResources />;
-                case 'profile':
-                    return <UserProfile activities={activities} />;
-                case 'admin':
-                    return <RoleBasedRoute requiredRole="admin"><AdminPanel /></RoleBasedRoute>;
-                default:
-                    return null;
-            }
-        })();
-        return (
-            <motion.div
-                key={activeTab}
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.22, ease: [0.4, 0, 0.2, 1] }}
-            >
-                {content}
-            </motion.div>
-        );
-    };
-
     return (
         <>
             {/* ── Desktop layout: locked to 100vh, only content column scrolls ── */}
             <div className="hidden md:flex" style={{ height: '100vh', background: '#080808', flexDirection: 'column', overflow: 'hidden' }}>
                 {showOnboarding && <Onboarding onComplete={() => setShowOnboarding(false)} />}
-                <Header onNavigate={setActiveTab} />
+                <Header />
                 <div style={{ display: 'flex', flex: 1, minHeight: 0, overflow: 'hidden' }}>
                     <Sidebar
                         tabs={navItems}
-                        activeTab={activeTab}
-                        onTabChange={setActiveTab}
                         collapsed={sidebarCollapsed}
                         onToggle={() => setSidebarCollapsed(c => !c)}
                     />
                     <div style={{ flex: 1, minWidth: 0, overflowY: 'auto', overflowX: 'hidden', background: 'radial-gradient(ellipse 80% 50% at 50% -10%, rgba(212,175,55,0.04) 0%, transparent 70%)' }}>
                         <main style={{ maxWidth: '1100px', margin: '0 auto', padding: '28px 24px 56px', width: '100%', boxSizing: 'border-box' }}>
-                            <ErrorBoundary>{renderTab()}</ErrorBoundary>
+                            <ErrorBoundary>
+                                <AppRoutes 
+                                    activities={activities}
+                                    handleAddActivity={handleAddActivity}
+                                    overviewTabNode={<OverviewTab activities={activities} loading={dataLoading} onAddActivity={handleAddActivity} onDeleteActivity={handleDeleteActivity} />}
+                                    aiTabNode={<AITab activities={activities} />}
+                                />
+                            </ErrorBoundary>
                         </main>
                     </div>
                 </div>
@@ -481,11 +446,18 @@ const AppContent: React.FC = () => {
             {/* ── Mobile layout: normal page scroll, bottom nav fixed ── */}
             <div className="flex flex-col md:hidden" style={{ minHeight: '100vh', background: '#080808' }}>
                 {showOnboarding && <Onboarding onComplete={() => setShowOnboarding(false)} />}
-                <Header onNavigate={setActiveTab} />
+                <Header />
                 <main style={{ flex: 1, padding: '20px 16px 80px', boxSizing: 'border-box' }}>
-                    <ErrorBoundary>{renderTab()}</ErrorBoundary>
+                    <ErrorBoundary>
+                        <AppRoutes 
+                            activities={activities}
+                            handleAddActivity={handleAddActivity}
+                            overviewTabNode={<OverviewTab activities={activities} loading={dataLoading} onAddActivity={handleAddActivity} onDeleteActivity={handleDeleteActivity} />}
+                            aiTabNode={<AITab activities={activities} />}
+                        />
+                    </ErrorBoundary>
                 </main>
-                <MobileNav items={navItems} activeTab={activeTab} onTabChange={setActiveTab} />
+                <MobileNav items={navItems} />
             </div>
 
             <div style={{ display: 'none' }}><NotificationSettings /></div>

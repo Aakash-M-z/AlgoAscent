@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 
 interface HeaderProps {
-  onNavigate?: (tab: string) => void;
 }
 
 /* ── Logout confirmation modal ───────────────────────────────── */
@@ -96,8 +96,9 @@ const LogoutModal: React.FC<{ onConfirm: () => void; onCancel: () => void }> = (
 };
 
 /* ── Header ──────────────────────────────────────────────────── */
-const Header: React.FC<HeaderProps> = ({ onNavigate }) => {
+const Header: React.FC<HeaderProps> = () => {
   const { user, logout } = useAuth();
+  const routerNavigate = useNavigate();
   const [showDropdown, setShowDropdown] = useState(false);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -119,10 +120,10 @@ const Header: React.FC<HeaderProps> = ({ onNavigate }) => {
     return () => document.removeEventListener('keydown', handler);
   }, []);
 
-  const navigate = useCallback((tab: string) => {
+  const navigate = useCallback((path: string) => {
     setShowDropdown(false);
-    onNavigate?.(tab);
-  }, [onNavigate]);
+    routerNavigate(path);
+  }, [routerNavigate]);
 
   const handleLogoutConfirm = useCallback(() => {
     setShowLogoutModal(false);
@@ -130,8 +131,8 @@ const Header: React.FC<HeaderProps> = ({ onNavigate }) => {
   }, [logout]);
 
   const menuItems = [
-    { label: 'Profile', icon: '◉', tab: 'profile' },
-    { label: 'Settings', icon: '⚙', tab: 'profile' },
+    { label: 'Profile', icon: '◉', path: '/profile' },
+    { label: 'Settings', icon: '⚙', path: '/profile' },
   ];
 
   const initials = user?.name?.charAt(0).toUpperCase() || 'U';
@@ -295,7 +296,7 @@ const Header: React.FC<HeaderProps> = ({ onNavigate }) => {
                     {menuItems.map(item => (
                       <button
                         key={item.label}
-                        onClick={() => navigate(item.tab)}
+                        onClick={() => navigate(item.path)}
                         style={{
                           width: '100%', display: 'flex', alignItems: 'center', gap: '10px',
                           padding: '9px 12px', borderRadius: '8px',
