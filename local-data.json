@@ -17,8 +17,8 @@
       "password": "we6mkrbjtm",
       "role": "user",
       "plan": "free",
-      "aiUsageCount": 0,
-      "aiUsageResetAt": "2026-03-18",
+      "aiUsageCount": 3,
+      "aiUsageResetAt": "2026-03-20",
       "id": "2",
       "createdAt": "2026-02-09T05:54:51.082Z"
     }
@@ -39,9 +39,25 @@
       "solved": true,
       "id": "1",
       "createdAt": "2026-03-18T22:07:03.596Z"
+    },
+    {
+      "userId": "2",
+      "date": "2026-03-19T06:49:33.374Z",
+      "category": "Arrays & Strings",
+      "topic": "Arrays & Strings",
+      "difficulty": "Easy",
+      "platform": "DSA Roadmap",
+      "timeSpent": 30,
+      "problemDescription": "Attempted: Two Sum",
+      "notes": null,
+      "timeComplexity": "O(n)",
+      "spaceComplexity": "O(n)",
+      "solved": false,
+      "id": "2",
+      "createdAt": "2026-03-19T06:49:33.378Z"
     }
   ],
-  "adminLogs": [ ],
+  "adminLogs": [],
   "tasks": [
     {
       "title": "dsa",

@@ -4,6 +4,8 @@ import axios, { AxiosError } from 'axios';
 import { storage } from './storage.js';
 import { InsertUser, InsertActivity, InsertTask } from '../shared/schema.js';
 import { signToken, verifyToken, extractBearer, JwtPayload } from './jwt.js';
+import adminRoutes from './adminRoutes.js';
+import interviewRoutes from './interviewRoutes.js';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
@@ -440,7 +442,7 @@ const requireAuth = (req: Request, res: Response, next: NextFunction) => {
     next();
 };
 
-const AI_FREE_DAILY_LIMIT = 2;
+const AI_FREE_DAILY_LIMIT = 20;
 
 /**
  * checkPlanAccess — requireAuth + AI quota enforcement.
@@ -781,6 +783,68 @@ api.post('/ai/explain-topic', checkPlanAccess, async (req, res) => {
     }
 });
 
+// ── General AI Chat route ────────────────────────────────────────
+
+api.post('/ai/chat', checkPlanAccess, async (req, res) => {
+    try {
+        const authUser = (req as any).authUser;
+        const { message, history = [], userStats } = req.body;
+        
+        if (!message) { res.status(400).json({ error: 'Message is required' }); return; }
+
+        const apiKey = process.env.OPENROUTER_API_KEY;
+        if (!apiKey || apiKey === 'your_openrouter_api_key_here') {
+            res.status(501).json({ error: 'API_KEY_MISSING', message: 'AI service is not configured' }); return;
+        }
+
+        const systemPrompt = `You are a smart, general-purpose AI assistant. 
+Your capabilities:
+1. Coding & DSA: Provide clean code solutions, explain the approach, and state time/space complexity.
+2. Interview Prep: Act as a mock interviewer or provide technical explanations.
+3. Productivity Analysis: Analyze the user's stats and provide actionable insights.
+4. General: Handle any general conversation naturally.
+
+User Context:
+${userStats ? JSON.stringify(userStats) : 'No metrics available'}
+
+Rules:
+- NEVER reject a valid query (e.g., do not refuse "give code" or "write a script").
+- Detect the user's intent automatically and adapt your response style.
+- Keep your tone friendly, helpful, and clear.`;
+
+        const messages = [
+            { role: 'system', content: systemPrompt },
+            ...history,
+            { role: 'user', content: message }
+        ];
+
+        let reply: string;
+        try {
+            reply = await callOpenRouter(apiKey, {
+                messages,
+                temperature: 0.6,
+                max_tokens: 1500,
+                timeoutMs: 25000,
+                retries: 1,
+                tag: '[chat]',
+            });
+        } catch (err: any) {
+            const code: string = err?.code ?? 'AI_UNAVAILABLE';
+            console.error(`[chat] Failed. code=${code}`, err?.message);
+            res.status(502).json({ error: code, message: 'AI failed to respond at this time' }); return;
+        }
+
+        if (authUser && authUser.role !== 'admin' && authUser.plan !== 'premium') {
+            await storage.incrementAiUsage(authUser.id).catch(() => { });
+        }
+
+        res.json({ reply });
+    } catch (error: any) {
+        console.error('[chat] Unexpected error:', error?.message ?? error);
+        res.status(500).json({ error: 'SERVER_ERROR', message: 'Internal server error' });
+    }
+});
+
 // ── Admin routes ─────────────────────────────────────────────────
 
 // GET all users
@@ -900,6 +964,12 @@ api.get('/users/:userId/ai-usage', requireAuth, async (req, res) => {
         res.status(500).json({ error: 'Server error' });
     }
 });
+
+// Advanced Enterprise Admin routes module
+api.use('/admin', requireAdmin, adminRoutes);
+
+// Mock Interview routes
+api.use('/interview', interviewRoutes);
 
 app.use('/api', api);
 app.use('/', api);
