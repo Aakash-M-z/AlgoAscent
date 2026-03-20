@@ -1,4 +1,8 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
+import ReactMarkdown from 'react-markdown';
+import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
+import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
+import { Copy, Check, Terminal, User as UserIcon, Bot } from 'lucide-react';
 import { Activity } from '../types';
 
 interface Message {
@@ -115,6 +119,91 @@ function generateResponse(input: string, activities: Activity[], username?: stri
     return `I'm not sure about that specific query, ${name}. Try asking me:\n\n• "What should I do next?"\n• "Analyze my productivity"\n• "How can I improve?"\n• "Predict my goals"\n• "Show my streak"\n\nYour current score is ${s.score}/100 — ${s.score >= 60 ? 'keep it up!' : 'let\'s improve it together!'}`;
 }
 
+/* ── UI Components ─────────────────────────────────────────── */
+
+const CodeBlock = ({ language, value }: { language: string; value: string }) => {
+    const [copied, setCopied] = useState(false);
+
+    const handleCopy = () => {
+        navigator.clipboard.writeText(value);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+    };
+
+    return (
+        <div className="group relative my-4 rounded-xl overflow-hidden border border-white/10 shadow-2xl">
+            <div className="flex items-center justify-between px-4 py-2 bg-[#1e1e1e] border-b border-white/5">
+                <div className="flex items-center gap-2">
+                    <Terminal size={12} className="text-gold" />
+                    <span className="text-[10px] font-bold text-white/40 uppercase tracking-widest">{language || 'code'}</span>
+                </div>
+                <button
+                    onClick={handleCopy}
+                    className="flex items-center gap-1.5 px-2 py-1 rounded-md text-white/40 hover:text-white/90 hover:bg-white/5 transition-all"
+                >
+                    {copied ? <Check size={12} className="text-green-400" /> : <Copy size={12} />}
+                    <span className="text-[10px] font-medium">{copied ? 'Copied!' : 'Copy'}</span>
+                </button>
+            </div>
+            <SyntaxHighlighter
+                language={language}
+                style={vscDarkPlus}
+                customStyle={{
+                    margin: 0,
+                    padding: '1.25rem',
+                    fontSize: '0.85rem',
+                    background: '#0d0d0d',
+                    lineHeight: '1.6',
+                }}
+            >
+                {value}
+            </SyntaxHighlighter>
+        </div>
+    );
+};
+
+const MarkdownContent = ({ text }: { text: string }) => {
+    // Fix potential malformed code blocks (e.g. ``cpp -> ```cpp)
+    const fixedText = text.replace(/``(\w+)/g, '```$1');
+
+    return (
+        <ReactMarkdown
+            components={{
+                code({ inline, className, children, ...props }: any) {
+                    const match = /language-(\w+)/.exec(className || '');
+                    return !inline && match ? (
+                        <CodeBlock
+                            language={match[1]}
+                            value={String(children).replace(/\n$/, '')}
+                            {...props}
+                        />
+                    ) : (
+                        <code className={`${className} bg-white/10 px-1.5 py-0.5 rounded text-gold-bright text-[0.85rem] font-mono`} {...props}>
+                            {children}
+                        </code>
+                    );
+                },
+                p: ({ children }) => <p className="mb-4 last:mb-0">{children}</p>,
+                ul: ({ children }) => <ul className="mb-4 list-disc list-inside space-y-1">{children}</ul>,
+                ol: ({ children }) => <ol className="mb-4 list-decimal list-inside space-y-1">{children}</ol>,
+                li: ({ children }) => <li className="text-[0.9rem] leading-7">{children}</li>,
+                h1: ({ children }) => <h1 className="text-xl font-bold mb-4 text-white mt-6">{children}</h1>,
+                h2: ({ children }) => <h2 className="text-lg font-bold mb-3 text-white mt-5">{children}</h2>,
+                h3: ({ children }) => <h3 className="text-md font-bold mb-2 text-white mt-4">{children}</h3>,
+                strong: ({ children }) => <strong className="font-bold text-gold-bright">{children}</strong>,
+                blockquote: ({ children }) => (
+                    <blockquote className="border-l-4 border-gold/40 pl-4 py-1 my-4 italic text-white/70 bg-white/5 rounded-r-md">
+                        {children}
+                    </blockquote>
+                ),
+            }}
+        >
+            {fixedText}
+        </ReactMarkdown>
+    );
+};
+
+
 const QUICK_PROMPTS = [
     'What should I do next?',
     'Analyze my productivity',
@@ -137,17 +226,63 @@ const AIAssistant: React.FC<Props> = ({ activities, username }) => {
 
     useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages, typing]);
 
-    const send = (text: string) => {
+    const send = async (text: string) => {
         if (!text.trim()) return;
         const userMsg: Message = { id: Date.now().toString(), role: 'user', text: text.trim(), ts: new Date() };
         setMessages(m => [...m, userMsg]);
         setInput('');
         setTyping(true);
-        setTimeout(() => {
+
+        try {
+            const token = localStorage.getItem('pt_token'); 
+            const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+            if (token) headers['Authorization'] = `Bearer ${token}`;
+            
+            // Format history for context
+            const history = messages
+                .filter(m => m.id !== '0') // Skip first welcome message
+                .slice(-10) // Keep last 10 messages
+                .map(m => ({ role: m.role === 'user' ? 'user' : 'assistant', content: m.text }));
+
+            // Provide current context limits to AI
+            const s = analyzeActivities(activities);
+            const userStats = { username, score: s.score, solved: s.solved, streak: s.streak, topCat: s.topCat };
+
+            const baseUrl = import.meta.env.VITE_API_URL || '/api';
+            const response = await fetch(`${baseUrl}/ai/chat`, {
+                method: 'POST',
+                headers,
+                body: JSON.stringify({ message: text, history, userStats })
+            });
+
+            if (!response.ok) {
+                if (response.status === 403) {
+                    const data = await response.json();
+                    setMessages(m => [...m, { 
+                        id: Date.now().toString(), 
+                        role: 'ai', 
+                        text: `⚠️ **AI Limit Reached**\n\n${data.message || 'You have reached your free daily limit for AI queries. Please try again tomorrow or upgrade to premium for unlimited access.'}`, 
+                        ts: new Date() 
+                    }]);
+                    return;
+                }
+                throw new Error('API failed');
+            }
+            const data = await response.json();
+            
+            if (data.reply) {
+                setMessages(m => [...m, { id: Date.now().toString(), role: 'ai', text: data.reply, ts: new Date() }]);
+            } else {
+                throw new Error('No reply from AI');
+            }
+        } catch (err) {
+            console.error('AI Chat Error:', err);
+            // Fallback to old basic matching if backend fails
             const reply = generateResponse(text, activities, username);
-            setMessages(m => [...m, { id: (Date.now() + 1).toString(), role: 'ai', text: reply, ts: new Date() }]);
+            setMessages(m => [...m, { id: Date.now().toString(), role: 'ai', text: reply, ts: new Date() }]);
+        } finally {
             setTyping(false);
-        }, 800 + Math.random() * 400);
+        }
     };
 
     const handleSubmit = (e: React.FormEvent) => { e.preventDefault(); send(input); };
@@ -198,23 +333,43 @@ const AIAssistant: React.FC<Props> = ({ activities, username }) => {
                 display: 'flex', flexDirection: 'column', gap: '12px',
             }}>
                 {messages.map(msg => (
-                    <div key={msg.id} style={{ display: 'flex', justifyContent: msg.role === 'user' ? 'flex-end' : 'flex-start', gap: '10px', alignItems: 'flex-end' }}>
-                        {msg.role === 'ai' && (
-                            <div style={{ width: '28px', height: '28px', borderRadius: '8px', background: 'rgba(212,175,55,0.1)', border: '1px solid rgba(212,175,55,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.85rem', flexShrink: 0 }}>🤖</div>
-                        )}
+                    <div key={msg.id} style={{ display: 'flex', flexDirection: 'column', alignItems: msg.role === 'user' ? 'flex-end' : 'flex-start', margin: '8px 0' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px', padding: '0 4px' }}>
+                            {msg.role === 'ai' ? (
+                                <>
+                                    <div style={{ width: '24px', height: '24px', borderRadius: '6px', background: 'rgba(212,175,55,0.1)', border: '1px solid rgba(212,175,55,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                        <Bot size={14} className="text-gold" />
+                                    </div>
+                                    <span style={{ fontSize: '0.7rem', fontWeight: 600, color: '#D4AF37', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Assistant</span>
+                                </>
+                            ) : (
+                                <>
+                                    <span style={{ fontSize: '0.7rem', fontWeight: 600, color: '#888', textTransform: 'uppercase', letterSpacing: '0.05em' }}>You</span>
+                                    <div style={{ width: '24px', height: '24px', borderRadius: '6px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                        <UserIcon size={14} className="text-white/60" />
+                                    </div>
+                                </>
+                            )}
+                        </div>
                         <div style={{
-                            maxWidth: '75%',
-                            padding: '10px 14px',
-                            borderRadius: msg.role === 'user' ? '14px 14px 4px 14px' : '14px 14px 14px 4px',
-                            background: msg.role === 'user' ? 'linear-gradient(135deg, #D4AF37, #B8960C)' : '#1A1A1A',
-                            border: msg.role === 'user' ? 'none' : '1px solid rgba(255,255,255,0.06)',
-                            color: msg.role === 'user' ? '#0B0B0B' : '#EAEAEA',
-                            fontSize: '0.9rem', lineHeight: 1.65,
-                            whiteSpace: 'pre-line',
-                            boxShadow: msg.role === 'user' ? '0 4px 12px rgba(212,175,55,0.2)' : 'none',
+                            maxWidth: '90%',
+                            padding: '16px 20px',
+                            borderRadius: msg.role === 'user' ? '20px 4px 20px 20px' : '4px 20px 20px 20px',
+                            background: msg.role === 'user' ? 'linear-gradient(135deg, #1A1A1A, #111111)' : '#161616',
+                            border: msg.role === 'user' ? '1px solid rgba(255,255,255,0.08)' : '1px solid rgba(212,175,55,0.15)',
+                            color: '#EAEAEA',
+                            fontSize: '0.94rem', lineHeight: 1.7,
+                            boxShadow: msg.role === 'user' ? '0 4px 20px rgba(0,0,0,0.3)' : '0 4px 20px rgba(212,175,55,0.05)',
                         }}>
-                            {msg.text}
-                            <div style={{ fontSize: '0.65rem', color: msg.role === 'user' ? 'rgba(0,0,0,0.5)' : '#444', marginTop: '4px', textAlign: 'right' }}>
+                            <MarkdownContent text={msg.text} />
+                            <div style={{ 
+                                fontSize: '0.65rem', 
+                                color: '#444', 
+                                marginTop: '12px', 
+                                textAlign: 'right', 
+                                borderTop: '1px solid rgba(255,255,255,0.05)',
+                                paddingTop: '6px'
+                            }}>
                                 {msg.ts.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                             </div>
                         </div>
