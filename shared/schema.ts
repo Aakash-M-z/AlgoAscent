@@ -58,3 +58,48 @@ export interface AdminLog {
 }
 
 export type InsertAdminLog = Omit<AdminLog, 'id' | 'createdAt'>;
+
+export interface FeatureFlag {
+  id: string;
+  name: string;
+  key: string;
+  enabled: boolean;
+  description: string;
+  updatedAt: Date;
+}
+
+export type InsertFeatureFlag = Omit<FeatureFlag, 'id' | 'updatedAt'>;
+
+export interface Notification {
+  id: string;
+  title: string;
+  message: string;
+  targetAudience: 'all' | 'premium' | 'free';
+  senderEmail: string;
+  createdAt: Date;
+}
+
+export type InsertNotification = Omit<Notification, 'id' | 'createdAt'>;
+
+export interface InterviewSession {
+  id: string;
+  userId: string;
+  type: string;
+  question: string;
+  userAnswer: string;
+  score: {
+     correctness: number;
+     optimization: number;
+     clarity: number;
+     overallScore: number;
+  };
+  feedback: {
+     strengths: string[];
+     weaknesses: string[];
+     improvements: string[];
+     idealAnswer: string;
+  };
+  createdAt: Date;
+}
+
+export type InsertInterviewSession = Omit<InterviewSession, 'id' | 'createdAt'>;

@@ -15,6 +15,9 @@ const XPPage = React.lazy(() => import('../features/xp/XPPage'));
 const ResourcesPage = React.lazy(() => import('../features/resources/ResourcesPage'));
 const ProfilePage = React.lazy(() => import('../features/profile/ProfilePage'));
 const AdminPage = React.lazy(() => import('../features/admin/AdminPage'));
+const MockInterviewPage = React.lazy(() => import('../features/interview/MockInterviewPage'));
+const MockInterviewSession = React.lazy(() => import('../features/interview/MockInterviewSession'));
+const MockInterviewResult = React.lazy(() => import('../features/interview/MockInterviewResult'));
 
 // Import actual components to render as children (since we want them rendered inside the lazy boundaries)
 import TaskManager from '../components/TaskManager';
@@ -96,6 +99,21 @@ const AppRoutes: React.FC<AppRoutesProps> = ({ overviewTabNode, aiTabNode, activ
             <AIPage>
               <PageTransition>{aiTabNode}</PageTransition>
             </AIPage>
+          </Suspense>
+        } />
+        <Route path="/interview" element={
+          <Suspense fallback={<PageLoader />}>
+            <PageTransition><MockInterviewPage /></PageTransition>
+          </Suspense>
+        } />
+        <Route path="/interview/start" element={
+          <Suspense fallback={<PageLoader />}>
+            <PageTransition><MockInterviewSession /></PageTransition>
+          </Suspense>
+        } />
+        <Route path="/interview/result" element={
+          <Suspense fallback={<PageLoader />}>
+            <PageTransition><MockInterviewResult /></PageTransition>
           </Suspense>
         } />
 

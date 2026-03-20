@@ -53,3 +53,44 @@ export const UserModel = mongoose.model('User', userSchema);
 export const ActivityModel = mongoose.model('Activity', activitySchema);
 export const AdminLogModel = mongoose.model('AdminLog', adminLogSchema);
 export const TaskModel = mongoose.model('Task', taskSchema);
+
+const featureFlagSchema = new Schema({
+    name: { type: String, required: true },
+    key: { type: String, required: true, unique: true },
+    enabled: { type: Boolean, default: false },
+    description: { type: String },
+    updatedAt: { type: Date, default: Date.now }
+});
+
+const notificationSchema = new Schema({
+    title: { type: String, required: true },
+    message: { type: String, required: true },
+    targetAudience: { type: String, enum: ['all', 'premium', 'free'], default: 'all' },
+    senderEmail: { type: String, required: true },
+    createdAt: { type: Date, default: Date.now }
+});
+
+export const FeatureFlagModel = mongoose.model('FeatureFlag', featureFlagSchema);
+export const NotificationModel = mongoose.model('Notification', notificationSchema);
+
+const interviewSessionSchema = new Schema({
+    userId: { type: String, required: true },
+    type: { type: String, required: true },
+    question: { type: String, required: true },
+    userAnswer: { type: String, required: true },
+    score: {
+        correctness: { type: Number, required: true },
+        optimization: { type: Number, required: true },
+        clarity: { type: Number, required: true },
+        overallScore: { type: Number, required: true }
+    },
+    feedback: {
+        strengths: [{ type: String }],
+        weaknesses: [{ type: String }],
+        improvements: [{ type: String }],
+        idealAnswer: { type: String, required: true }
+    },
+    createdAt: { type: Date, default: Date.now }
+});
+
+export const InterviewSessionModel = mongoose.model('InterviewSession', interviewSessionSchema);

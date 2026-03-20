@@ -385,6 +385,13 @@ const AppContent: React.FC = () => {
 
     const navItems = useMemo(() => {
         const items = [...NAV_ITEMS] as { id: string; label: string; icon: string; section: string; path: string }[];
+        
+        const interviewItem = user?.role === 'admin'
+            ? { id: 'interview', label: 'Interview Analytics', icon: '📈', section: 'main', path: '/interview' }
+            : { id: 'interview', label: 'Mock Interview', icon: '🎤', section: 'main', path: '/interview' };
+            
+        items.splice(4, 0, interviewItem);
+
         if (user?.role === 'admin') items.push({ id: 'admin', label: 'Admin', icon: '⚙', section: 'account', path: '/admin' });
         return items;
     }, [user]);
