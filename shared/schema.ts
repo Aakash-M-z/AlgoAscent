@@ -1,8 +1,11 @@
 export interface User {
   id: string;
   username: string;
+  name?: string;
   email: string;
   password: string;
+  profileImage?: string;
+  learningGoal?: string;
   role: 'admin' | 'user';
   plan: 'free' | 'premium';
   aiUsageCount: number;       // resets daily
