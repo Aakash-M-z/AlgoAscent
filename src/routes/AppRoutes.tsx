@@ -18,6 +18,7 @@ const AdminPage = React.lazy(() => import('../features/admin/AdminPage'));
 const MockInterviewPage = React.lazy(() => import('../features/interview/MockInterviewPage'));
 const MockInterviewSession = React.lazy(() => import('../features/interview/MockInterviewSession'));
 const MockInterviewResult = React.lazy(() => import('../features/interview/MockInterviewResult'));
+const LandingPage = React.lazy(() => import('../features/landing/LandingPage'));
 
 // Import actual components to render as children (since we want them rendered inside the lazy boundaries)
 import TaskManager from '../components/TaskManager';
@@ -29,6 +30,7 @@ import BadgeSystem from '../components/BadgeSystem';
 import XPSystem from '../components/XPSystem';
 import SolutionResources from '../components/SolutionResources';
 import UserProfile from '../components/UserProfile';
+import Settings from '../components/Settings';
 import AdminPanel from '../components/AdminPanel';
 import RoleBasedRoute from '../components/RoleBasedRoute';
 
@@ -53,16 +55,36 @@ const PageTransition = ({ children }: { children: React.ReactNode }) => {
   );
 };
 
-// Skeleton loader for Suspense fallback
+// Enhanced skeleton loader for Suspense fallback
 const PageLoader = () => (
-  <div className="flex flex-col gap-6 animate-pulse p-4">
-    <div className="h-12 bg-white/5 rounded-lg w-1/3"></div>
-    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-      <div className="h-32 bg-white/5 rounded-xl"></div>
-      <div className="h-32 bg-white/5 rounded-xl"></div>
-      <div className="h-32 bg-white/5 rounded-xl"></div>
+  <div className="flex flex-col gap-8 animate-pulse p-2 md:p-6 opacity-60">
+    <div className="flex items-center justify-between">
+        <div className="h-10 bg-white/10 rounded-xl w-48 shadow-[inset_0_0_10px_rgba(255,255,255,0.02)]"></div>
+        <div className="h-10 bg-white/10 rounded-xl w-10"></div>
     </div>
-    <div className="h-64 bg-white/5 rounded-xl w-full"></div>
+    
+    <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      {[...Array(4)].map((_, i) => (
+        <div key={i} className="h-32 bg-white/5 border border-white/5 rounded-2xl relative overflow-hidden">
+           <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/5 to-transparent -translate-x-full animate-[shimmer_2s_infinite]" />
+        </div>
+      ))}
+    </div>
+
+    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="col-span-2 h-[400px] bg-white/5 border border-white/5 rounded-3xl relative overflow-hidden">
+             <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/5 to-transparent -translate-x-full animate-[shimmer_2s_infinite]" />
+        </div>
+        <div className="h-[400px] bg-white/5 border border-white/5 rounded-3xl relative overflow-hidden">
+             <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/5 to-transparent -translate-x-full animate-[shimmer_2s_infinite]" />
+        </div>
+    </div>
+
+    <style>{`
+      @keyframes shimmer {
+        100% { transform: translateX(100%); }
+      }
+    `}</style>
   </div>
 );
 
@@ -72,88 +94,95 @@ const AppRoutes: React.FC<AppRoutesProps> = ({ overviewTabNode, aiTabNode, activ
   return (
     <AnimatePresence mode="wait">
       <Routes location={location} key={location.pathname}>
-        {/* MAIN */}
+        {/* LANDING PAGE */}
         <Route path="/" element={
+          <Suspense fallback={<PageLoader />}>
+            <LandingPage />
+          </Suspense>
+        } />
+
+        {/* DASHBOARD - MAIN */}
+        <Route path="/dashboard" element={
           <Suspense fallback={<PageLoader />}>
             <OverviewPage>
               <PageTransition>{overviewTabNode}</PageTransition>
             </OverviewPage>
           </Suspense>
         } />
-        <Route path="/tasks" element={
+        <Route path="/dashboard/tasks" element={
           <Suspense fallback={<PageLoader />}>
             <TasksPage>
               <PageTransition><TaskManager /></PageTransition>
             </TasksPage>
           </Suspense>
         } />
-        <Route path="/analytics" element={
+        <Route path="/dashboard/analytics" element={
           <Suspense fallback={<PageLoader />}>
             <AnalyticsPage>
               <PageTransition><AnalyticsDashboard activities={activities} /></PageTransition>
             </AnalyticsPage>
           </Suspense>
         } />
-        <Route path="/ai" element={
+        <Route path="/dashboard/ai" element={
           <Suspense fallback={<PageLoader />}>
             <AIPage>
               <PageTransition>{aiTabNode}</PageTransition>
             </AIPage>
           </Suspense>
         } />
-        <Route path="/interview" element={
+        <Route path="/dashboard/interview" element={
           <Suspense fallback={<PageLoader />}>
             <PageTransition><MockInterviewPage /></PageTransition>
           </Suspense>
         } />
-        <Route path="/interview/start" element={
+        <Route path="/dashboard/interview/start" element={
           <Suspense fallback={<PageLoader />}>
             <PageTransition><MockInterviewSession /></PageTransition>
           </Suspense>
         } />
-        <Route path="/interview/result" element={
+        <Route path="/dashboard/interview/result" element={
           <Suspense fallback={<PageLoader />}>
             <PageTransition><MockInterviewResult /></PageTransition>
           </Suspense>
         } />
 
-        {/* TOOLS */}
-        <Route path="/roadmap" element={
+        {/* DASHBOARD - TOOLS */}
+        <Route path="/dashboard/roadmap" element={
           <Suspense fallback={<PageLoader />}>
             <RoadmapPage>
               <PageTransition><DSARoadmap activities={activities} onAddActivity={handleAddActivity} /></PageTransition>
             </RoadmapPage>
           </Suspense>
         } />
-        <Route path="/subjects" element={
+        <Route path="/dashboard/subjects" element={
           <Suspense fallback={<PageLoader />}>
             <SubjectsPage>
               <PageTransition><CoreSubjects /></PageTransition>
             </SubjectsPage>
           </Suspense>
         } />
-        <Route path="/statistics" element={
+        <Route path="/dashboard/statistics" element={
           <Suspense fallback={<PageLoader />}>
             <StatisticsPage>
               <PageTransition><ProgressStats activities={activities} /></PageTransition>
             </StatisticsPage>
           </Suspense>
         } />
-        <Route path="/badges" element={
+        <Route path="/dashboard/badges" element={
           <Suspense fallback={<PageLoader />}>
             <BadgesPage>
               <PageTransition><BadgeSystem activities={activities} /></PageTransition>
             </BadgesPage>
           </Suspense>
         } />
-        <Route path="/xp" element={
+        <Route path="/dashboard/xp" element={
           <Suspense fallback={<PageLoader />}>
             <XPPage>
               <PageTransition><XPSystem activities={activities} /></PageTransition>
             </XPPage>
           </Suspense>
         } />
-        <Route path="/resources" element={
+        <Route path="/dashboard/resources" element={
           <Suspense fallback={<PageLoader />}>
             <ResourcesPage>
               <PageTransition><SolutionResources /></PageTransition>
@@ -161,15 +190,20 @@ const AppRoutes: React.FC<AppRoutesProps> = ({ overviewTabNode, aiTabNode, activ
           </Suspense>
         } />
 
-        {/* ACCOUNT */}
-        <Route path="/profile" element={
+        {/* DASHBOARD - ACCOUNT */}
+        <Route path="/dashboard/profile" element={
           <Suspense fallback={<PageLoader />}>
             <ProfilePage>
               <PageTransition><UserProfile activities={activities} /></PageTransition>
             </ProfilePage>
           </Suspense>
         } />
-        <Route path="/admin" element={
+        <Route path="/dashboard/settings" element={
+          <Suspense fallback={<PageLoader />}>
+            <PageTransition><Settings /></PageTransition>
+          </Suspense>
+        } />
+        <Route path="/dashboard/admin" element={
           <Suspense fallback={<PageLoader />}>
             <AdminPage>
               <PageTransition>
