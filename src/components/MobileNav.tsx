@@ -1,4 +1,5 @@
 import React from 'react';
+import { NavLink, useLocation } from 'react-router-dom';
 
 interface NavItem {
     id: string;
@@ -11,8 +12,6 @@ interface Props {
     items: NavItem[];
 }
 
-import { NavLink, useLocation } from 'react-router-dom';
-
 const MOBILE_IDS = ['overview', 'tasks', 'analytics', 'roadmap', 'profile'];
 
 const MobileNav: React.FC<Props> = ({ items }) => {
@@ -20,72 +19,24 @@ const MobileNav: React.FC<Props> = ({ items }) => {
     const location = useLocation();
 
     return (
-        <nav style={{
-            position: 'fixed',
-            bottom: 0,
-            left: 0,
-            right: 0,
-            height: '60px',
-            paddingBottom: 'env(safe-area-inset-bottom)',
-            background: 'rgba(13,13,13,0.98)',
-            borderTop: '1px solid rgba(212,175,55,0.15)',
-            backdropFilter: 'blur(24px)',
-            WebkitBackdropFilter: 'blur(24px)',
-            display: 'flex',
-            zIndex: 200,
-        }}>
+        <nav className="fixed bottom-0 left-0 right-0 h-16 bg-black/95 border-t border-gold/15 backdrop-blur-xl flex z-[200] pb-[env(safe-area-inset-bottom)] md:hidden pointer-events-auto">
             {mobileItems.map(item => {
                 const active = location.pathname === item.path;
                 return (
                     <NavLink
                         key={item.id}
                         to={item.path}
-                        style={{
-                            flex: 1,
-                            display: 'flex',
-                            flexDirection: 'column',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            gap: '3px',
-                            padding: '8px 4px',
-                            background: 'none',
-                            border: 'none',
-                            cursor: 'pointer',
-                            position: 'relative',
-                            WebkitTapHighlightColor: 'transparent',
-                        }}
+                        className="flex-1 flex flex-col items-center justify-center gap-1 py-2 relative transition-all active:scale-95"
                     >
                         {active && (
-                            <span style={{
-                                position: 'absolute',
-                                top: 0,
-                                left: '50%',
-                                transform: 'translateX(-50%)',
-                                width: '28px',
-                                height: '2px',
-                                background: 'linear-gradient(90deg, #D4AF37, #FFD700)',
-                                borderRadius: '0 0 3px 3px',
-                            }} />
+                            <span className="absolute top-0 left-1/2 -translate-x-1/2 w-8 h-[2px] bg-gradient-to-r from-gold to-yellow-400 rounded-b" />
                         )}
 
-                        <span style={{
-                            fontSize: '1.15rem',
-                            lineHeight: 1,
-                            color: active ? '#D4AF37' : '#3a3a3a',
-                            filter: active ? 'drop-shadow(0 0 5px rgba(212,175,55,0.5))' : 'none',
-                            transform: active ? 'scale(1.12)' : 'scale(1)',
-                            transition: 'all 0.18s ease',
-                        }}>
+                        <span className={`text-xl transition-all duration-200 ${active ? 'text-gold scale-110 drop-shadow-[0_0_8px_rgba(212,175,55,0.4)]' : 'text-white/30'}`}>
                             {item.icon}
                         </span>
 
-                        <span style={{
-                            fontSize: '0.58rem',
-                            letterSpacing: '0.03em',
-                            fontWeight: active ? 600 : 400,
-                            color: active ? '#D4AF37' : '#3a3a3a',
-                            transition: 'color 0.18s ease',
-                        }}>
+                        <span className={`text-[10px] uppercase font-bold tracking-tighter transition-all duration-200 ${active ? 'text-gold' : 'text-white/20'}`}>
                             {item.label}
                         </span>
                     </NavLink>
