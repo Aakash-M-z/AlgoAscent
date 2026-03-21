@@ -41,7 +41,7 @@ import NextProblemCTA from './components/NextProblemCTA';
 import CoreSubjects from './components/CoreSubjects';
 import XPSystem from './components/XPSystem';
 import { motion, AnimatePresence } from 'framer-motion';
-import { NavLink, useLocation } from 'react-router-dom';
+import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import AppRoutes from './routes/AppRoutes';
 
 /* ── Demo activities shown to new users ───────────────────────── */
@@ -72,17 +72,17 @@ const DEMO_ACTIVITIES: Activity[] = (() => {
 })();
 
 const NAV_ITEMS = [
-    { id: 'overview', label: 'Overview', icon: '⊞', section: 'main', path: '/' },
-    { id: 'tasks', label: 'Tasks', icon: '✓', section: 'main', path: '/tasks' },
-    { id: 'analytics', label: 'Analytics', icon: '◐', section: 'main', path: '/analytics' },
-    { id: 'ai', label: 'AI Assistant', icon: '◈', section: 'main', path: '/ai' },
-    { id: 'roadmap', label: 'DSA Roadmap', icon: '◎', section: 'tools', path: '/roadmap' },
-    { id: 'subjects', label: 'Core Subjects', icon: '⬡', section: 'tools', path: '/subjects' },
-    { id: 'stats', label: 'Statistics', icon: '▦', section: 'tools', path: '/statistics' },
-    { id: 'badges', label: 'Badges', icon: '◆', section: 'tools', path: '/badges' },
-    { id: 'xp', label: 'XP & Levels', icon: '★', section: 'tools', path: '/xp' },
-    { id: 'resources', label: 'Resources', icon: '◇', section: 'tools', path: '/resources' },
-    { id: 'profile', label: 'Profile', icon: '◉', section: 'account', path: '/profile' },
+    { id: 'overview', label: 'Overview', icon: '⊞', section: 'main', path: '/dashboard' },
+    { id: 'tasks', label: 'Tasks', icon: '✓', section: 'main', path: '/dashboard/tasks' },
+    { id: 'analytics', label: 'Analytics', icon: '◐', section: 'main', path: '/dashboard/analytics' },
+    { id: 'ai', label: 'AI Assistant', icon: '◈', section: 'main', path: '/dashboard/ai' },
+    { id: 'roadmap', label: 'DSA Roadmap', icon: '◎', section: 'tools', path: '/dashboard/roadmap' },
+    { id: 'subjects', label: 'Core Subjects', icon: '⬡', section: 'tools', path: '/dashboard/subjects' },
+    { id: 'stats', label: 'Statistics', icon: '▦', section: 'tools', path: '/dashboard/statistics' },
+    { id: 'badges', label: 'Badges', icon: '◆', section: 'tools', path: '/dashboard/badges' },
+    { id: 'xp', label: 'XP & Levels', icon: '★', section: 'tools', path: '/dashboard/xp' },
+    { id: 'resources', label: 'Resources', icon: '◇', section: 'tools', path: '/dashboard/resources' },
+    { id: 'profile', label: 'Profile', icon: '◉', section: 'account', path: '/dashboard/profile' },
 ] as const;
 
 type TabId = typeof NAV_ITEMS[number]['id'] | 'admin';
@@ -332,12 +332,15 @@ const AppContent: React.FC = () => {
     const { user, isAuthenticated, isLoading: authLoading } = useAuth();
     const { toast } = useToast();
 
+    const location = useLocation();
+    const navigate = useNavigate();
     const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
     const [activities, setActivities] = useState<Activity[]>([]);
     const [dataLoading, setDataLoading] = useState(false);
     const [showOnboarding, setShowOnboarding] = useState(false);
     const [showHomePage, setShowHomePage] = useState(false);
     const [showIntro, setShowIntro] = useState(true);
+    const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
 
     // Check onboarding on first auth
     useEffect(() => {
@@ -345,6 +348,22 @@ const AppContent: React.FC = () => {
             setShowOnboarding(true);
         }
     }, [isAuthenticated]);
+
+    // Redirect standalone profile to dashboard/profile
+    useEffect(() => {
+        if (location.pathname === '/profile') {
+            navigate('/dashboard/profile', { replace: true });
+        }
+    }, [location.pathname, navigate]);
+
+    // Fast transition from Landing Page
+    useEffect(() => {
+        if (location.state?.fromGetStarted) {
+            setShowIntro(false);
+            // Replace history to clear the flag
+            window.history.replaceState({}, document.title);
+        }
+    }, [location.state]);
 
     // Load activities when authenticated
     useEffect(() => {
@@ -387,14 +406,16 @@ const AppContent: React.FC = () => {
         const items = [...NAV_ITEMS] as { id: string; label: string; icon: string; section: string; path: string }[];
         
         const interviewItem = user?.role === 'admin'
-            ? { id: 'interview', label: 'Interview Analytics', icon: '📈', section: 'main', path: '/interview' }
-            : { id: 'interview', label: 'Mock Interview', icon: '🎤', section: 'main', path: '/interview' };
+            ? { id: 'interview', label: 'Interview Analytics', icon: '📈', section: 'main', path: '/dashboard/interview' }
+            : { id: 'interview', label: 'Mock Interview', icon: '🎤', section: 'main', path: '/dashboard/interview' };
             
         items.splice(4, 0, interviewItem);
 
-        if (user?.role === 'admin') items.push({ id: 'admin', label: 'Admin', icon: '⚙', section: 'account', path: '/admin' });
+        if (user?.role === 'admin') items.push({ id: 'admin', label: 'Admin', icon: '⚙', section: 'account', path: '/dashboard/admin' });
         return items;
     }, [user]);
+
+    const isDashboardPath = location.pathname.startsWith('/dashboard');
 
     if (authLoading) {
         return (
@@ -404,14 +425,12 @@ const AppContent: React.FC = () => {
         );
     }
 
-    if (!isAuthenticated) {
-        if (showHomePage) return <HomePage onGetStarted={() => setShowHomePage(false)} />;
+    if (!isAuthenticated && isDashboardPath) {
         return (
             <>
                 {showIntro && (
                     <IntroScreen onDone={() => setShowIntro(false)} />
                 )}
-                {/* Login fades in underneath as intro fades out */}
                 <div style={{
                     opacity: showIntro ? 0 : 1,
                     transition: 'opacity 0.5s ease',
@@ -423,20 +442,88 @@ const AppContent: React.FC = () => {
         );
     }
 
-    return (
-        <>
-            {/* ── Desktop layout: locked to 100vh, only content column scrolls ── */}
-            <div className="hidden md:flex" style={{ height: '100vh', background: '#080808', flexDirection: 'column', overflow: 'hidden' }}>
+    // Dashboard Layout
+    if (isAuthenticated && isDashboardPath) {
+
+        return (
+            <div className="h-screen w-full flex flex-col bg-black overflow-hidden relative">
                 {showOnboarding && <Onboarding onComplete={() => setShowOnboarding(false)} />}
-                <Header />
-                <div style={{ display: 'flex', flex: 1, minHeight: 0, overflow: 'hidden' }}>
+                
+                {/* Header Container */}
+                <div className="relative z-[150] bg-black/80 backdrop-blur-xl border-b border-white/5 flex items-center pr-4">
+                    <button 
+                        onClick={() => setMobileSidebarOpen(!mobileSidebarOpen)}
+                        className="p-4 text-white/40 hover:text-gold transition-colors md:hidden"
+                        aria-label="Toggle Menu"
+                    >
+                        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={mobileSidebarOpen ? "M6 18L18 6M6 6l12 12" : "M4 6h16M4 12h16M4 18h16"} />
+                        </svg>
+                    </button>
+                    <div className="flex-1">
+                        <Header />
+                    </div>
+                </div>
+
+                {/* Dashboard layout container */}
+                <div className="flex flex-1 overflow-hidden relative">
+                    {/* Desktop Sidebar (Auto-hidden on mobile) */}
                     <Sidebar
                         tabs={navItems}
                         collapsed={sidebarCollapsed}
                         onToggle={() => setSidebarCollapsed(c => !c)}
                     />
-                    <div style={{ flex: 1, minWidth: 0, overflowY: 'auto', overflowX: 'hidden', background: 'radial-gradient(ellipse 80% 50% at 50% -10%, rgba(212,175,55,0.04) 0%, transparent 70%)' }}>
-                        <main style={{ maxWidth: '1100px', margin: '0 auto', padding: '28px 24px 56px', width: '100%', boxSizing: 'border-box' }}>
+
+                    {/* Mobile Sidebar Overlay */}
+                    <AnimatePresence>
+                        {mobileSidebarOpen && (
+                            <>
+                                <motion.div 
+                                    initial={{ opacity: 0 }}
+                                    animate={{ opacity: 1 }}
+                                    exit={{ opacity: 0 }}
+                                    onClick={() => setMobileSidebarOpen(false)}
+                                    className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[200] md:hidden"
+                                />
+                                <motion.div 
+                                    initial={{ x: -300 }}
+                                    animate={{ x: 0 }}
+                                    exit={{ x: -300 }}
+                                    transition={{ type: "spring", damping: 25, stiffness: 200 }}
+                                    className="fixed top-0 bottom-0 left-0 w-72 bg-[#0c0c0c] z-[210] border-r border-white/10 md:hidden flex flex-col"
+                                >
+                                    <div className="p-6 flex items-center justify-between border-b border-white/5">
+                                        <span className="text-xl font-black text-white uppercase tracking-tighter">
+                                            PrepTrack <span className="text-gold">AI</span>
+                                        </span>
+                                        <button onClick={() => setMobileSidebarOpen(false)} className="text-white/20 p-2">✕</button>
+                                    </div>
+                                    <nav className="flex-1 overflow-y-auto p-4 space-y-1">
+                                        {navItems.map(item => (
+                                            <NavLink 
+                                                key={item.id} 
+                                                to={item.path} 
+                                                onClick={() => setMobileSidebarOpen(false)}
+                                                className={({ isActive }) => `flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${isActive ? 'bg-gold/10 text-gold border border-gold/20' : 'text-white/40 hover:text-white hover:bg-white/5'}`}
+                                            >
+                                                <span className="text-lg">{item.icon}</span>
+                                                <span className="font-bold text-sm uppercase tracking-wide">{item.label}</span>
+                                            </NavLink>
+                                        ))}
+                                    </nav>
+                                </motion.div>
+                            </>
+                        )}
+                    </AnimatePresence>
+                    
+                    {/* Main content area */}
+                    <div className="flex-1 overflow-y-auto overflow-x-hidden relative transition-all duration-300 bg-[#080808]">
+                        <motion.main 
+                            initial={{ opacity: 0, y: 10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ duration: 0.6, ease: "easeOut" }}
+                            className="max-w-[1200px] mx-auto p-4 md:p-8 pb-20 md:pb-8"
+                        >
                             <ErrorBoundary>
                                 <AppRoutes 
                                     activities={activities}
@@ -445,30 +532,27 @@ const AppContent: React.FC = () => {
                                     aiTabNode={<AITab activities={activities} />}
                                 />
                             </ErrorBoundary>
-                        </main>
+                        </motion.main>
                     </div>
+
+                    {/* Mobile Bottom Nav (Hidden on desktop) */}
+                    <MobileNav items={navItems} />
                 </div>
             </div>
+        );
+    }
 
-            {/* ── Mobile layout: normal page scroll, bottom nav fixed ── */}
-            <div className="flex flex-col md:hidden" style={{ minHeight: '100vh', background: '#080808' }}>
-                {showOnboarding && <Onboarding onComplete={() => setShowOnboarding(false)} />}
-                <Header />
-                <main style={{ flex: 1, padding: '20px 16px 80px', boxSizing: 'border-box' }}>
-                    <ErrorBoundary>
-                        <AppRoutes 
-                            activities={activities}
-                            handleAddActivity={handleAddActivity}
-                            overviewTabNode={<OverviewTab activities={activities} loading={dataLoading} onAddActivity={handleAddActivity} onDeleteActivity={handleDeleteActivity} />}
-                            aiTabNode={<AITab activities={activities} />}
-                        />
-                    </ErrorBoundary>
-                </main>
-                <MobileNav items={navItems} />
-            </div>
 
-            <div style={{ display: 'none' }}><NotificationSettings /></div>
-        </>
+    // Default to catching everything else (Landing Page or redirects)
+    return (
+        <ErrorBoundary>
+            <AppRoutes 
+                activities={activities}
+                handleAddActivity={handleAddActivity}
+                overviewTabNode={<OverviewTab activities={activities} loading={dataLoading} onAddActivity={handleAddActivity} onDeleteActivity={handleDeleteActivity} />}
+                aiTabNode={<AITab activities={activities} />}
+            />
+        </ErrorBoundary>
     );
 };
 
