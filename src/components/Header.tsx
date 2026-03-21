@@ -1,97 +1,69 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { motion, AnimatePresence } from 'framer-motion';
 
 interface HeaderProps {
 }
 
-/* ── Logout confirmation modal ───────────────────────────────── */
+/* ── Logout confirmation modal (Using Portals for perfect centering) ── */
 const LogoutModal: React.FC<{ onConfirm: () => void; onCancel: () => void }> = ({ onConfirm, onCancel }) => {
   // Close on ESC
   useEffect(() => {
     const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onCancel(); };
-    document.addEventListener('keydown', handler);
-    return () => document.removeEventListener('keydown', handler);
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
   }, [onCancel]);
 
-  return (
-    <div
-      onClick={onCancel}
-      style={{
-        position: 'fixed', inset: 0, zIndex: 200,
-        background: 'rgba(0,0,0,0.7)',
-        backdropFilter: 'blur(6px)',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        animation: 'overlayFadeIn 0.2s ease',
-      }}
-    >
-      <div
+  return createPortal(
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 min-h-screen">
+      <motion.div 
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        onClick={onCancel}
+        className="absolute inset-0 bg-black/70 backdrop-blur-md"
+      />
+      
+      <motion.div 
+        initial={{ opacity: 0, scale: 0.9, y: 20 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.9, y: 20 }}
         onClick={e => e.stopPropagation()}
-        style={{
-          background: '#111',
-          border: '1px solid rgba(212,175,55,0.25)',
-          borderRadius: '20px',
-          padding: '32px 28px',
-          width: '100%', maxWidth: '360px',
-          margin: '0 20px',
-          boxShadow: '0 24px 64px rgba(0,0,0,0.8), 0 0 40px rgba(212,175,55,0.06)',
-          animation: 'cardMount 0.25s cubic-bezier(0.22,1,0.36,1) both',
-        }}
+        className="relative bg-[#0A0A0A] border border-white/10 rounded-[2.5rem] w-full max-w-[400px] p-10 shadow-[0_0_100px_rgba(0,0,0,0.8),0_0_40px_rgba(212,175,55,0.08)]"
       >
-        {/* Icon */}
-        <div style={{
-          width: '48px', height: '48px', borderRadius: '14px', margin: '0 auto 20px',
-          background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          fontSize: '1.4rem',
-        }}>⏻</div>
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-32 h-1 bg-gradient-to-r from-transparent via-red-500/50 to-transparent" />
+        
+        {/* Sign Out Icon */}
+        <div className="w-16 h-16 bg-red-500/10 border border-red-500/20 rounded-2xl flex items-center justify-center mb-8 mx-auto shadow-inner">
+          <svg className="w-7 h-7 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+          </svg>
+        </div>
 
-        <h2 style={{
-          textAlign: 'center', fontSize: '1.1rem', fontWeight: 700,
-          color: '#EAEAEA', marginBottom: '8px',
-          fontFamily: 'Poppins, Inter, sans-serif',
-        }}>Sign Out</h2>
-        <p style={{
-          textAlign: 'center', fontSize: '0.85rem', color: '#666',
-          marginBottom: '28px', lineHeight: 1.5,
-        }}>
-          Are you sure you want to sign out of your account?
+        <h2 className="text-center text-2xl font-black text-white/95 mb-3 tracking-tighter">Sign Out?</h2>
+        <p className="text-center text-white/40 text-sm mb-10 leading-relaxed font-medium">
+          Ready to leave? Your progress is saved, but you'll need to sign back in for AI insights.
         </p>
 
-        <div style={{ display: 'flex', gap: '10px' }}>
-          <button
-            onClick={onCancel}
-            style={{
-              flex: 1, padding: '11px',
-              background: 'rgba(255,255,255,0.04)',
-              border: '1px solid rgba(255,255,255,0.08)',
-              borderRadius: '10px', color: '#888',
-              fontSize: '0.875rem', fontWeight: 600,
-              cursor: 'pointer', transition: 'all 0.2s',
-            }}
-            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,255,255,0.15)'; (e.currentTarget as HTMLElement).style.color = '#EAEAEA'; }}
-            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,255,255,0.08)'; (e.currentTarget as HTMLElement).style.color = '#888'; }}
-          >
-            Cancel
-          </button>
+        <div className="flex flex-col gap-3">
           <button
             onClick={onConfirm}
-            style={{
-              flex: 1, padding: '11px',
-              background: 'rgba(239,68,68,0.12)',
-              border: '1px solid rgba(239,68,68,0.3)',
-              borderRadius: '10px', color: '#ef4444',
-              fontSize: '0.875rem', fontWeight: 700,
-              cursor: 'pointer', transition: 'all 0.2s',
-            }}
-            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(239,68,68,0.22)'; (e.currentTarget as HTMLElement).style.boxShadow = '0 0 16px rgba(239,68,68,0.2)'; }}
-            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(239,68,68,0.12)'; (e.currentTarget as HTMLElement).style.boxShadow = 'none'; }}
+            className="w-full px-8 py-4 bg-red-600 border border-red-500 rounded-2xl text-white text-sm font-black hover:bg-red-500 hover:shadow-[0_0_25px_rgba(239,68,68,0.3)] transition-all uppercase tracking-widest active:scale-95"
           >
-            Sign Out
+            Confirm Logout
+          </button>
+          <button
+            onClick={onCancel}
+            className="w-full px-8 py-4 bg-white/[0.03] border border-white/5 rounded-2xl text-white/30 text-sm font-bold hover:bg-white/[0.08] hover:text-white transition-all uppercase tracking-widest"
+          >
+            Stay Logged In
           </button>
         </div>
-      </div>
-    </div>
+      </motion.div>
+    </div>,
+    document.body
   );
 };
 
@@ -131,8 +103,8 @@ const Header: React.FC<HeaderProps> = () => {
   }, [logout]);
 
   const menuItems = [
-    { label: 'Profile', icon: '◉', path: '/profile' },
-    { label: 'Settings', icon: '⚙', path: '/profile' },
+    { label: 'Profile', icon: '◉', path: '/dashboard/profile' },
+    { label: 'Settings', icon: '⚙', path: '/dashboard/settings' },
   ];
 
   const initials = user?.name?.charAt(0).toUpperCase() || 'U';

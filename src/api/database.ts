@@ -63,6 +63,28 @@ export class DatabaseAPI {
     } catch (e) { console.error('googleAuth:', e); return null; }
   }
 
+  // ── Profile ─────────────────────────────────────────────────────
+  
+  async getProfile(): Promise<User | null> {
+    try {
+      const res = await fetch(`${API_BASE}/user/profile`, { headers: authHeaders() });
+      if (!res.ok) return null;
+      return res.json();
+    } catch { return null; }
+  }
+
+  async updateProfile(data: Partial<User>): Promise<User | null> {
+    try {
+      const res = await fetch(`${API_BASE}/user/profile`, {
+        method: 'PUT',
+        headers: authHeaders(),
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) return null;
+      return res.json();
+    } catch { return null; }
+  }
+
   // ── Users ───────────────────────────────────────────────────────
 
   async getUser(id: string | number): Promise<User | null> {

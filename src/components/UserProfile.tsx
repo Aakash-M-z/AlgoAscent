@@ -1,4 +1,4 @@
-﻿import React, { useMemo } from 'react';
+import React, { useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { Activity } from '../types';
 import { useAuth } from '../contexts/AuthContext';
@@ -25,7 +25,9 @@ function calcStreak(activities: Activity[]): number {
 }
 
 const UserProfile: React.FC<Props> = ({ activities = [] }) => {
-    const { user } = useAuth();
+    const { user, isLoading: authLoading } = useAuth();
+
+    console.log('[UserProfile] Rendering for user:', user?.id);
 
     const stats = useMemo(() => ({
         solved: activities.filter(a => a.problemSolved).length,
@@ -33,6 +35,21 @@ const UserProfile: React.FC<Props> = ({ activities = [] }) => {
         streak: calcStreak(activities),
         hours: Math.round(activities.reduce((s, a) => s + a.duration, 0) / 60),
     }), [activities]);
+
+    if (authLoading) return (
+        <div className="section-gap animate-pulse">
+            <div className="h-10 bg-white/5 rounded-xl w-48 mb-6" />
+            <div className="h-32 bg-white/5 rounded-2xl w-full" />
+        </div>
+    );
+
+    if (!user) return (
+        <div className="section-gap flex flex-col items-center justify-center p-20 text-center bg-white/[0.02] rounded-3xl border border-dashed border-white/10">
+            <div className="text-4xl mb-6 opacity-20">👤</div>
+            <h2 className="text-xl font-bold text-white mb-2">Login Required</h2>
+            <p className="text-white/40 max-w-xs">Please sign in to view your profile analytics and streak progress.</p>
+        </div>
+    );
 
     const currentLevel = useMemo(() => {
         for (let i = LEVELS.length - 1; i >= 0; i--) {

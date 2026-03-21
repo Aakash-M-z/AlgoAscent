@@ -7,47 +7,88 @@ import {
 
 const router = Router();
 
-// Middleware to ensure MongoDB is connected
+// ── Middleware: MongoDB Status Checker ─────────────────────
+// Instead of 503, we flag the request so routes can provide fallback data
 router.use((req, res, next) => {
-    if (mongoose.connection.readyState !== 1) {
-        res.status(503).json({ error: 'Advanced Admin features require MongoDB connection. Please configure MONGODB_URI.' });
-        return;
+    (req as any).dbConnected = mongoose.connection.readyState === 1;
+    if (!(req as any).dbConnected) {
+        console.warn('⚠️ Admin Route: MongoDB not connected, using fallback mode');
     }
     next();
 });
 
+// ── Mock Data Generators ──────────────────────────────────
+const getMockAnalytics = () => ({
+    kpis: { 
+        totalUsers: 1240, 
+        dau: 156, 
+        newUsersLast30: 84, 
+        retention: 68 
+    },
+    diffStats: [
+        { difficulty: 'Easy', count: 450 },
+        { difficulty: 'Medium', count: 820 },
+        { difficulty: 'Hard', count: 180 }
+    ],
+    userGrowth: [
+        { month: '2025-10', count: 120 },
+        { month: '2025-11', count: 240 },
+        { month: '2025-12', count: 480 },
+        { month: '2026-01', count: 860 },
+        { month: '2026-02', count: 1240 }
+    ],
+    isFallback: true
+});
+
+const getMockAIUsage = () => ({
+    usageByPlan: [
+        { plan: 'free', total: 4500, avg: 12.5 },
+        { plan: 'pro', total: 12800, avg: 45.2 },
+        { plan: 'admin', total: 150, avg: 5.0 }
+    ],
+    topUsers: [
+        { username: 'Aakashext', email: 'aakash@example.com', aiUsageCount: 450, plan: 'pro' },
+        { username: 'MockUser1', email: 'user1@mock.com', aiUsageCount: 320, plan: 'free' },
+    ],
+    isFallback: true
+});
+
+const getMockFeatures = () => ([
+    { name: 'AI Recommendations', key: 'ai_recs', enabled: true, description: 'Smart problem suggestions (Mocked)' },
+    { name: 'Mock Interviews', key: 'mock_interviews', enabled: false, description: 'Beta P2P interviews (Mocked)' },
+    { name: 'Advanced Analytics', key: 'advanced_analytics', enabled: true, description: 'Pro charts for users (Mocked)' },
+]);
+
 // ── 1. Advanced Analytics Dashboard ───────────────────────
 router.get('/analytics', async (req, res) => {
+    if (!(req as any).dbConnected) {
+        return res.json(getMockAnalytics());
+    }
+
     try {
         const totalUsers = await UserModel.countDocuments();
-        
         const thirtyDaysAgo = new Date();
         thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
         const newUsersLast30 = await UserModel.countDocuments({ createdAt: { $gte: thirtyDaysAgo } });
         
         const todayStr = new Date().toISOString().slice(0, 10);
-        // DAU: users who solved/attempted a problem today
         const dauRows = await ActivityModel.distinct('userId', { date: { $regex: `^${todayStr}` } });
         const dau = dauRows.length;
         
-        // Retention: users > 7 days old who were active in last 7 days
         const sevenDaysAgo = new Date();
         sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
         const activeRecent = await ActivityModel.distinct('userId', { createdAt: { $gte: sevenDaysAgo } });
         const olderUsersCount = await UserModel.countDocuments({ createdAt: { $lt: sevenDaysAgo } });
         
-        // Just rough retention approximation
         let retention = 0;
         if (olderUsersCount > 0) {
             retention = Math.round((activeRecent.length / olderUsersCount) * 100);
         }
 
-        // Activity distribution by difficulty
         const diffStats = await ActivityModel.aggregate([
             { $group: { _id: "$difficulty", count: { $sum: 1 } } }
         ]);
 
-        // Monthly user growth (rough grouping by month)
         const userGrowth = await UserModel.aggregate([
             { $project: { month: { $month: "$createdAt" }, year: { $year: "$createdAt" } } },
             { $group: { _id: { month: "$month", year: "$year" }, count: { $sum: 1 } } },
@@ -58,7 +99,8 @@ router.get('/analytics', async (req, res) => {
         res.json({
             kpis: { totalUsers, dau, newUsersLast30, retention },
             diffStats: diffStats.map(d => ({ difficulty: d._id, count: d.count })),
-            userGrowth: userGrowth.map(g => ({ month: `${g._id.year}-${String(g._id.month).padStart(2, '0')}`, count: g.count }))
+            userGrowth: userGrowth.map(g => ({ month: `${g._id.year}-${String(g._id.month).padStart(2, '0')}`, count: g.count })),
+            isFallback: false
         });
     } catch (err: any) {
         res.status(500).json({ error: err.message });
@@ -67,9 +109,11 @@ router.get('/analytics', async (req, res) => {
 
 // ── 2. AI Usage Monitoring ────────────────────────────────
 router.get('/ai-monitoring', async (req, res) => {
+    if (!(req as any).dbConnected) {
+        return res.json(getMockAIUsage());
+    }
+
     try {
-        // total ai requests proxy (sum of all users aiUsageCount if they didn't reset, but realistically we need a log)
-        // For simplicity, we just aggregate current usage
         const usageData = await UserModel.aggregate([
             { $group: { _id: "$plan", totalAi: { $sum: "$aiUsageCount" }, avgAi: { $avg: "$aiUsageCount" } } }
         ]);
@@ -80,7 +124,8 @@ router.get('/ai-monitoring', async (req, res) => {
 
         res.json({ 
             usageByPlan: usageData.map(d => ({ plan: d._id, total: d.totalAi, avg: Math.round(d.avgAi * 10) / 10 })),
-            topUsers 
+            topUsers,
+            isFallback: false
         });
     } catch (err: any) {
         res.status(500).json({ error: err.message });
@@ -89,10 +134,13 @@ router.get('/ai-monitoring', async (req, res) => {
 
 // ── 3. Feature Toggles ────────────────────────────────────
 router.get('/features', async (req, res) => {
+    if (!(req as any).dbConnected) {
+        return res.json(getMockFeatures());
+    }
+
     try {
         let flags = await FeatureFlagModel.find();
         if (flags.length === 0) {
-            // Seed defaults
             await FeatureFlagModel.insertMany([
                 { name: 'AI Recommendations', key: 'ai_recs', enabled: true, description: 'Smart problem suggestions' },
                 { name: 'Mock Interviews', key: 'mock_interviews', enabled: false, description: 'Beta P2P interviews' },
@@ -107,6 +155,10 @@ router.get('/features', async (req, res) => {
 });
 
 router.patch('/features/:key', async (req, res) => {
+    if (!(req as any).dbConnected) {
+        return res.status(200).json({ key: req.params.key, enabled: req.body.enabled, mock: true });
+    }
+
     try {
         const { enabled } = req.body;
         const flag = await FeatureFlagModel.findOneAndUpdate({ key: req.params.key }, { enabled, updatedAt: new Date() }, { new: true });
@@ -119,21 +171,23 @@ router.patch('/features/:key', async (req, res) => {
 
 // ── 4. System Health ──────────────────────────────────────
 router.get('/health-details', async (req, res) => {
+    const dbStatus = (req as any).dbConnected ? 'Connected' : 'Disconnected (Fallback Mode)';
+    
     try {
-        const dbState = mongoose.connection.readyState;
-        const dbStatus = dbState === 1 ? 'Connected' : dbState === 2 ? 'Connecting' : 'Disconnected';
-        
-        // Fake latency check
-        const start = Date.now();
-        await UserModel.findOne();
-        const latency = Date.now() - start;
+        let latency = 0;
+        if ((req as any).dbConnected) {
+            const start = Date.now();
+            await UserModel.findOne();
+            latency = Date.now() - start;
+        }
 
         res.json({
             uptime: process.uptime(),
             dbStatus,
             dbLatencyMs: latency,
             memory: process.memoryUsage(),
-            env: process.env.NODE_ENV
+            env: process.env.NODE_ENV,
+            isFallback: !(req as any).dbConnected
         });
     } catch (err: any) {
         res.status(500).json({ error: err.message });
@@ -142,15 +196,16 @@ router.get('/health-details', async (req, res) => {
 
 // ── 5. Notifications / Broadcast ──────────────────────────
 router.post('/notifications', async (req, res) => {
+    if (!(req as any).dbConnected) {
+        return res.status(201).json({ ...req.body, mock: true, createdAt: new Date() });
+    }
+
     try {
         const { title, message, targetAudience } = req.body;
         const adminEmail = (req as any).adminUser?.email || 'admin@system.local';
-        
         const notif = await NotificationModel.create({
             title, message, targetAudience, senderEmail: adminEmail
         });
-        
-        // In a real app, you'd trigger webhooks, emails, or socket events here.
         res.status(201).json(notif);
     } catch (err: any) {
         res.status(500).json({ error: err.message });
@@ -158,6 +213,10 @@ router.post('/notifications', async (req, res) => {
 });
 
 router.get('/notifications', async (req, res) => {
+    if (!(req as any).dbConnected) {
+        return res.json([]);
+    }
+
     try {
         const notifs = await NotificationModel.find().sort({ createdAt: -1 }).limit(50);
         res.json(notifs);
@@ -168,11 +227,16 @@ router.get('/notifications', async (req, res) => {
 
 // ── 6. Filtered Audit Logs ────────────────────────────────
 router.get('/logs', async (req, res) => {
+    if (!(req as any).dbConnected) {
+        return res.json([
+            { action: 'STORAGE_FALLBACK', detail: 'System running in local-data.json mode', createdAt: new Date() }
+        ]);
+    }
+
     try {
         const { action, limit = 50 } = req.query;
         let query: any = {};
         if (action) query.action = action;
-        
         const logs = await AdminLogModel.find(query).sort({ createdAt: -1 }).limit(Number(limit));
         res.json(logs);
     } catch (err: any) {

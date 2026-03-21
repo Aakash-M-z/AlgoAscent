@@ -78,8 +78,8 @@ const ParticleBackground: React.FC<Props> = ({
                 y: Math.random() * H,
                 vx: (Math.random() - 0.5) * particleSpeed,
                 vy: (Math.random() - 0.5) * particleSpeed,
-                radius: Math.random() * 1.4 + 0.6,
-                alpha: Math.random() * 0.5 + 0.4,
+                radius: Math.random() * 2 + 1, // Larger particles
+                alpha: Math.random() * 0.4 + 0.6, // Higher base visibility
             }));
         };
 
@@ -120,9 +120,9 @@ const ParticleBackground: React.FC<Props> = ({
                     const dy = a.y - b.y;
                     const d2 = dx * dx + dy * dy;
                     if (d2 < lineDist2) {
-                        ctx.globalAlpha = (1 - d2 / lineDist2) * 0.55;
+                        ctx.globalAlpha = (1 - d2 / lineDist2) * 0.8; // More opaque lines
                         ctx.strokeStyle = lineColor;
-                        ctx.lineWidth = 0.7;
+                        ctx.lineWidth = 1; // Thicker lines
                         ctx.beginPath();
                         ctx.moveTo(a.x, a.y);
                         ctx.lineTo(b.x, b.y);
@@ -145,14 +145,14 @@ const ParticleBackground: React.FC<Props> = ({
 
             // Ambient glow pass
             ctx.save();
-            ctx.globalAlpha = 0.018;
+            ctx.globalAlpha = 0.04; // Stronger glow
             for (const p of particles) {
-                const g = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.radius * 14);
+                const g = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.radius * 16);
                 g.addColorStop(0, `rgba(${rgbChannels},1)`);
                 g.addColorStop(1, 'rgba(0,0,0,0)');
                 ctx.fillStyle = g;
                 ctx.beginPath();
-                ctx.arc(p.x, p.y, p.radius * 14, 0, Math.PI * 2);
+                ctx.arc(p.x, p.y, p.radius * 16, 0, Math.PI * 2);
                 ctx.fill();
             }
             ctx.restore();

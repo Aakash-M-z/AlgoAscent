@@ -29,17 +29,16 @@ export interface IStorage {
 // Try MongoDB first; if it fails (no network, wrong URI, etc.) fall back to FileStorage
 async function createStorage(): Promise<IStorage> {
   if (process.env.MONGODB_URI) {
-    try {
-      const ok = await connectMongo();
-      if (ok) {
-        console.log('📦 Using MongoDB storage');
-        return new MongoStorage();
-      }
-    } catch (err: any) {
-      console.warn('⚠️  MongoDB connect threw:', err?.message);
+    const ok = await connectMongo();
+    if (ok) {
+      return new MongoStorage();
     }
+    // If not OK, we intentionally move to file storage after connectMongo logs its warning
+  } else {
+    console.warn('⚠️  MONGODB_URI not found in environment');
   }
-  console.log('📁 Using file-based storage (local-data.json)');
+  
+  console.log('📁 Initializing Fallback: Local File Storage (local-data.json)');
   return new FileStorage();
 }
 
