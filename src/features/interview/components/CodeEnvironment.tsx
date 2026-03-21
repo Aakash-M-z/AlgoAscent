@@ -67,44 +67,34 @@ const CodeEnvironment: React.FC<CodeEnvironmentProps> = ({
                 code, 
                 language: selectedLang.monaco, 
                 questionText: question,
-                functionName
+                functionName,
+                testCases
             });
             
             setOutput(res);
 
-            const rawStdout = res.stdout || '';
-            const caseInputs = rawStdout.split('---CASE_START---').slice(1).map((c: string) => c.split('---CASE_END---')[0].trim());
-            
-            const results = testCases.map((tc, i) => {
-                try {
-                    const actualStr = caseInputs[i];
-                    if (!actualStr) throw new Error("No output for this case");
-                    
-                    const actual = JSON.parse(actualStr);
-                    const expected = tc.expectedOutput;
-                    
-                    // Deep compare for structured data
-                    const passed = JSON.stringify(actual) === JSON.stringify(expected);
-
+            if (res.results) {
+                const results = res.results.map((r: any, i: number) => {
+                    const originalTc = testCases[i];
                     return {
-                        ...tc,
-                        actualOutput: actualStr,
-                        passed,
-                        status: passed ? 'Accepted' : 'Wrong Answer'
+                        ...originalTc,
+                        actualOutput: r.output !== undefined ? JSON.stringify(r.output) : r.error || 'Execution Error',
+                        passed: r.status === 'Passed',
+                        status: r.status
                     };
-                } catch (err: any) {
-                    return {
-                        ...tc,
-                        actualOutput: caseInputs[i] || 'Execution Error',
-                        passed: false,
-                        status: err.message || 'Error'
-                    };
-                }
-            });
-            
-            setTestResults(results);
-        } catch (error) {
-            setOutput({ stderr: 'Internal execution error. Please try again.' });
+                });
+                setTestResults(results);
+            } else {
+                setTestResults(testCases.map(tc => ({
+                    ...tc,
+                    actualOutput: 'Execution Error',
+                    passed: false,
+                    status: 'Error'
+                })));
+            }
+        } catch (error: any) {
+            const errorMsg = error.response?.data?.details || error.response?.data?.error || 'Internal execution error. Please try again.';
+            setOutput({ stderr: errorMsg });
         } finally {
             setIsRunning(false);
         }
