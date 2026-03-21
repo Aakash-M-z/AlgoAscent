@@ -2,6 +2,7 @@ import 'dotenv/config';
 import app from './app.js';
 import { storageReady } from './storage.js';
 
+
 const PORT = Number(process.env.PORT) || 3001;
 
 async function start() {
@@ -15,10 +16,12 @@ async function start() {
   // This prevents the race condition where early requests hit an empty StorageProxy
   try {
     const storage = await storageReady;
-    console.log('   Storage   : ✓ ready\n');
+    console.log('   MongoDB   : ✅ MongoDB Connected');
+    console.log('   Storage   : ✓ Ready (StorageProxy operational)\n');
   } catch (err: any) {
-    console.error('   Storage   : ✗ failed to initialise —', err?.message);
-    console.error('   Falling back to file storage automatically.\n');
+    console.error('   MongoDB   : ❌ MongoDB Connection Failed —', err?.message);
+    console.error('   Fallback  : ⚠️ System running in localized mode (File Storage)');
+    console.error('   Admin     : ⚠️ High-level analytics will use fallback/mock data\n');
   }
 
   const server = app.listen(PORT, () => {
