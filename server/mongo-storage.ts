@@ -5,36 +5,50 @@ import { User, InsertUser, Activity, InsertActivity, AdminLog, InsertAdminLog, T
 
 export let mongoConnected = false;
 
+/**
+ * Connects to MongoDB with enhanced logging and error handling.
+ * Does NOT fallback silenty if connection fails.
+ */
 export async function connectMongo(): Promise<boolean> {
     const uri = process.env.MONGODB_URI || '';
+    
     if (!uri) {
-        console.warn('⚠️  MONGODB_URI not set — skipping MongoDB');
+        console.error('❌ MONGODB_URI is not defined in .env file');
         return false;
     }
+
+    // Mask URI for safe logging
+    const maskedUri = uri.replace(/\/\/.*:.*@/, '//****:****@');
+    console.log(`📡 Connecting to MongoDB: ${maskedUri}`);
+
     try {
         await mongoose.connect(uri, {
-            serverSelectionTimeoutMS: 4000,  // fail fast locally
-            connectTimeoutMS: 4000,
-            socketTimeoutMS: 8000,
+            serverSelectionTimeoutMS: 5000,
+            connectTimeoutMS: 5000,
         });
+
         mongoConnected = true;
-        console.log('✅ Connected to MongoDB Atlas');
+        console.log('✅ MongoDB Connected Successfully');
         return true;
     } catch (err: any) {
-        // Surface the real reason so it's easy to debug
-        const reason = err?.reason?.servers
-            ? 'No reachable servers (check Atlas IP whitelist or network)'
-            : err?.message ?? String(err);
-        console.warn(`⚠️  MongoDB unavailable: ${reason}`);
-        console.warn('   → Falling back to file storage (local-data.json)');
+        mongoConnected = false;
+        
+        let errorHint = '';
+        if (err.message.includes('authentication failed')) {
+            errorHint = 'Check your MongoDB Atlas username and password (ensure special chars are URL encoded).';
+        } else if (err.message.includes('IP address') || err.message.includes('reachable')) {
+            errorHint = 'Check your MongoDB Atlas IP Whitelist / Network Access.';
+        }
+
+        console.error(`❌ MongoDB Connection Failed: ${err.message}`);
+        if (errorHint) console.error(`💡 Hint: ${errorHint}`);
+        
         return false;
     }
 }
 
 export class MongoStorage implements IStorage {
-
-    // ── Users ────────────────────────────────────────────────────
-
+    // ... rest of the file remains same
     async getUser(id: string | number): Promise<User | undefined> {
         try {
             const user = await UserModel.findById(id.toString());
@@ -73,8 +87,6 @@ export class MongoStorage implements IStorage {
         return !!result;
     }
 
-    // ── Activities ───────────────────────────────────────────────
-
     async getUserActivities(userId: string | number): Promise<Activity[]> {
         const activities = await ActivityModel.find({ userId: userId.toString() }).sort({ createdAt: -1 });
         return activities.map(a => this.mapActivity(a));
@@ -100,8 +112,6 @@ export class MongoStorage implements IStorage {
         const result = await ActivityModel.findByIdAndDelete(id.toString());
         return !!result;
     }
-
-    // ── Admin Logs ───────────────────────────────────────────────
 
     async createAdminLog(log: InsertAdminLog): Promise<AdminLog> {
         const entry = new AdminLogModel(log);
@@ -149,14 +159,15 @@ export class MongoStorage implements IStorage {
         return updated ? this.mapUser(updated) : undefined;
     }
 
-    // ── Mappers ──────────────────────────────────────────────────
-
     private mapUser(doc: any): User {
         return {
             id: doc._id.toString(),
             username: doc.username,
+            name: doc.name,
             email: doc.email,
             password: doc.password,
+            profileImage: doc.profileImage,
+            learningGoal: doc.learningGoal,
             role: doc.role ?? 'user',
             plan: doc.plan ?? 'free',
             aiUsageCount: doc.aiUsageCount ?? 0,
