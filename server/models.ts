@@ -1,9 +1,12 @@
-import mongoose, { Schema, Document } from 'mongoose';
+import mongoose, { Schema } from 'mongoose';
 
 const userSchema = new Schema({
     username: { type: String, required: true, unique: true },
+    name: { type: String },
     email: { type: String, required: true, unique: true },
     password: { type: String, required: true },
+    profileImage: { type: String },
+    learningGoal: { type: String },
     role: { type: String, default: 'user', required: true },
     plan: { type: String, default: 'free', required: true },
     aiUsageCount: { type: Number, default: 0 },
