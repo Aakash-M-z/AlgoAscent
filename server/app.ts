@@ -566,8 +566,8 @@ async function callOpenRouter(apiKey: string, opts: ORCallOptions): Promise<stri
                         headers: {
                             'Authorization': `Bearer ${apiKey}`,
                             'Content-Type': 'application/json',
-                            'HTTP-Referer': OR_REFERER,
-                            'X-Title': 'DSA Progress Tracker',
+                            'HTTP-Referer': process.env.FRONTEND_URL || 'http://localhost:5173',
+                            'X-Title': 'DSA Tracker AI',
                         },
                     },
                 );
@@ -789,9 +789,34 @@ api.post('/ai/explain-topic', checkPlanAccess, async (req, res) => {
 
 // ── General AI Chat route ────────────────────────────────────────
 
-api.post('/ai/chat', checkPlanAccess, async (req, res) => {
+api.post('/ai/chat', async (req, res) => {
     try {
-        const authUser = (req as any).authUser;
+        let authUser: any = null;
+        
+        // Optional Auth Check - allow unauthenticated fallback
+        const token = extractBearer(req.headers.authorization);
+        if (token) {
+            const payload = verifyToken(token);
+            if (payload) {
+                // Check usage if not admin/premium
+                if (payload.role !== 'admin' && payload.plan !== 'premium') {
+                    const user = await storage.getUser(payload.id);
+                    if (user) {
+                        const today = new Date().toISOString().slice(0, 10);
+                        const resetAt = (user as any).aiUsageResetAt ?? today;
+                        const usageToday = resetAt === today ? ((user as any).aiUsageCount ?? 0) : 0;
+                        if (usageToday >= AI_FREE_DAILY_LIMIT) {
+                            res.status(403).json({
+                                error: 'AI_LIMIT_REACHED',
+                                message: `Free plan allows ${AI_FREE_DAILY_LIMIT} AI requests per day. Upgrade to Premium for unlimited access.`
+                            }); return;
+                        }
+                    }
+                }
+                authUser = payload;
+            }
+        }
+
         const { message, history = [], userStats } = req.body;
         
         if (!message) { res.status(400).json({ error: 'Message is required' }); return; }
@@ -801,20 +826,23 @@ api.post('/ai/chat', checkPlanAccess, async (req, res) => {
             res.status(501).json({ error: 'API_KEY_MISSING', message: 'AI service is not configured' }); return;
         }
 
-        const systemPrompt = `You are a smart, general-purpose AI assistant. 
-Your capabilities:
-1. Coding & DSA: Provide clean code solutions, explain the approach, and state time/space complexity.
-2. Interview Prep: Act as a mock interviewer or provide technical explanations.
-3. Productivity Analysis: Analyze the user's stats and provide actionable insights.
-4. General: Handle any general conversation naturally.
+        const hasUserData = userStats && (userStats.solved > 0 || userStats.streak > 0 || userStats.topCat);
+        
+        const systemPrompt = hasUserData 
+            ? `You are an expert AI mentor and interviewer for Software Engineering and DSA.
+You have access to the user's progress data:
+- Problems solved: ${userStats.solved || 0}
+- Current streak: ${userStats.streak || 0} days
+- Strongest/Most active topic: ${userStats.topCat || 'N/A'}
 
-User Context:
-${userStats ? JSON.stringify(userStats) : 'No metrics available'}
-
-Rules:
-- NEVER reject a valid query (e.g., do not refuse "give code" or "write a script").
-- Detect the user's intent automatically and adapt your response style.
-- Keep your tone friendly, helpful, and clear.`;
+Act as a mentor + interviewer. Use this data to personalize your responses.
+Encourage them on their streak. If they ask for advice, guide them based on their recent topics.
+Detect the user's intent. If they want to chat, converse naturally.
+Never reject a valid query. Keep your tone friendly, helpful, and clear.`
+            : `You are a helpful AI assistant for coding interviews and DSA.
+Provide clean code solutions, explain the approach, and state time/space complexity.
+Act as a mentor. Handle general conversation naturally.
+Never reject a valid query. Keep your tone friendly, helpful, and clear.`;
 
         const messages = [
             { role: 'system', content: systemPrompt },
