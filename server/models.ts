@@ -85,12 +85,17 @@ const interviewSessionSchema = new Schema({
         correctness: { type: Number, required: true },
         optimization: { type: Number, required: true },
         clarity: { type: Number, required: true },
-        overallScore: { type: Number, required: true }
+        overallScore: { type: Number, required: true },
+        testCasesPassed: { type: String }
     },
     feedback: {
         strengths: [{ type: String }],
         weaknesses: [{ type: String }],
         improvements: [{ type: String }],
+        complexityAnalysis: {
+            time: { type: String },
+            space: { type: String }
+        },
         idealAnswer: { type: String, required: true }
     },
     createdAt: { type: Date, default: Date.now }

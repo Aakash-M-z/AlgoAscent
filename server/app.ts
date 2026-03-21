@@ -975,6 +975,10 @@ api.use('/admin', requireAdmin, adminRoutes);
 // Mock Interview routes
 api.use('/interview', interviewRoutes);
 
+// AI Mentor routes
+import mentorRoutes from './mentorRoutes.js';
+api.use('/mentor', mentorRoutes);
+
 app.use('/api', api);
 app.use('/', api);
 

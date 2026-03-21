@@ -27,5 +27,17 @@ export const mockInterviewApi = {
     getHistory: async () => {
         const res = await api.get('/interview/history');
         return res.data;
+    },
+    getCodeFeedback: async (payload: { question: string, code: string, language: string }) => {
+        const res = await api.post('/interview/feedback', payload);
+        return res.data;
+    },
+    evaluateApproach: async (payload: { question: string, approach: string }) => {
+        const res = await api.post('/interview/evaluate-approach', payload);
+        return res.data;
+    },
+    runCode: async (payload: { code: string, language: string, questionText: string, functionName: string }) => {
+        const res = await api.post('/interview/run', payload);
+        return res.data;
     }
 };

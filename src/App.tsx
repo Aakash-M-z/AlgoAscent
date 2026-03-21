@@ -172,6 +172,18 @@ const OverviewTab: React.FC<{
     const isNewUser = activities.length === 0;
     const displayActivities = isNewUser ? DEMO_ACTIVITIES : activities;
 
+    // Today's progress
+    const todayKey = new Date().toISOString().slice(0, 10);
+    const todayActivities = displayActivities.filter(a => a.date.slice(0, 10) === todayKey);
+    const todaySolved = todayActivities.filter(a => a.problemSolved).length;
+    const todayMins = todayActivities.reduce((s, a) => s + a.duration, 0);
+
+    // Streak reminder
+    const hasActivityToday = activities.some(a => a.date.slice(0, 10) === todayKey);
+    const yesterdayKey = new Date(Date.now() - 864e5).toISOString().slice(0, 10);
+    const hasYesterday = activities.some(a => a.date.slice(0, 10) === yesterdayKey);
+    const streakAtRisk = !hasActivityToday && hasYesterday;
+
     return (
         <div className="section-gap">
             {/* Demo banner */}
@@ -207,17 +219,82 @@ const OverviewTab: React.FC<{
             {/* Next recommended problem CTA */}
             {!loading && <NextProblemCTA activities={displayActivities} />}
 
-            {/* Daily motivation + streak */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: '12px', alignItems: 'start' }}>
-                <DailyMotivation />
-                <StreakTracker activities={displayActivities} />
-            </div>
+            {/* Daily motivation */}
+            <DailyMotivation />
 
-            {/* Heatmap */}
+            {/* ── Heatmap 2-col grid ── */}
             {loading ? <SkeletonChart /> : (
-                <div className="card-dark" style={{ padding: '20px 24px' }}>
-                    <div className="card-title" style={{ marginBottom: '16px' }}>Activity Heatmap</div>
-                    <SimpleHeatmap activities={displayActivities} />
+                <div className="heatmap-grid" style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'minmax(0, 1fr) 220px',
+                    gap: '14px',
+                    alignItems: 'start',
+                }}>
+                    {/* Left: Heatmap */}
+                    <div className="card-dark" style={{ padding: '20px 24px' }}>
+                        <div className="card-title" style={{ marginBottom: '16px' }}>Activity Heatmap</div>
+                        <SimpleHeatmap activities={displayActivities} />
+                    </div>
+
+                    {/* Right: Streak + Today + Reminder */}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                        <StreakTracker activities={displayActivities} />
+
+                        {/* Today's Progress */}
+                        <motion.div
+                            initial={{ opacity: 0, y: 8 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ delay: 0.15, duration: 0.35 }}
+                            className="card-dark"
+                            style={{ padding: '16px', borderColor: todaySolved > 0 ? 'rgba(34,197,94,0.2)' : 'rgba(255,255,255,0.06)' }}
+                        >
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+                                <span style={{ fontSize: '0.9rem' }}>📅</span>
+                                <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#888', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Today</span>
+                            </div>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                    <span style={{ fontSize: '0.75rem', color: '#555' }}>Solved</span>
+                                    <span style={{ fontSize: '1rem', fontWeight: 800, color: todaySolved > 0 ? '#22c55e' : '#333' }}>{isNewUser ? '—' : todaySolved}</span>
+                                </div>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                    <span style={{ fontSize: '0.75rem', color: '#555' }}>Time</span>
+                                    <span style={{ fontSize: '1rem', fontWeight: 800, color: todayMins > 0 ? '#D4AF37' : '#333' }}>{isNewUser ? '—' : `${todayMins}m`}</span>
+                                </div>
+                            </div>
+                            {!isNewUser && todaySolved === 0 && (
+                                <div style={{ marginTop: '10px', fontSize: '0.68rem', color: '#444', textAlign: 'center', padding: '6px', borderRadius: '7px', background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.04)' }}>
+                                    Nothing logged yet today
+                                </div>
+                            )}
+                        </motion.div>
+
+                        {/* Streak Reminder */}
+                        <AnimatePresence>
+                            {streakAtRisk && (
+                                <motion.div
+                                    initial={{ opacity: 0, scale: 0.95 }}
+                                    animate={{ opacity: 1, scale: 1 }}
+                                    exit={{ opacity: 0, scale: 0.95 }}
+                                    transition={{ duration: 0.3 }}
+                                    style={{
+                                        padding: '14px 16px', borderRadius: '14px',
+                                        background: 'linear-gradient(135deg, rgba(245,158,11,0.1), rgba(245,158,11,0.04))',
+                                        border: '1px solid rgba(245,158,11,0.3)',
+                                        boxShadow: '0 0 20px rgba(245,158,11,0.08)',
+                                    }}
+                                >
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
+                                        <span style={{ fontSize: '1rem' }}>🔥</span>
+                                        <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#f59e0b' }}>Streak at risk!</span>
+                                    </div>
+                                    <div style={{ fontSize: '0.72rem', color: '#888', lineHeight: 1.5 }}>
+                                        Solve 1 more problem today to keep your streak alive.
+                                    </div>
+                                </motion.div>
+                            )}
+                        </AnimatePresence>
+                    </div>
                 </div>
             )}
 
@@ -298,11 +375,10 @@ const OverviewTab: React.FC<{
                 };
                 return onAddActivity(activity);
             }} />
-            {/* Notifications */}
             <DailyProblemNotification />
         </div>
     );
-};
+}
 
 /* ── AI Tab (chat + analysis + recommendations sub-tabs) ─────── */
 const AITab: React.FC<{ activities: Activity[] }> = ({ activities }) => {
@@ -404,11 +480,11 @@ const AppContent: React.FC = () => {
 
     const navItems = useMemo(() => {
         const items = [...NAV_ITEMS] as { id: string; label: string; icon: string; section: string; path: string }[];
-        
+
         const interviewItem = user?.role === 'admin'
             ? { id: 'interview', label: 'Interview Analytics', icon: '📈', section: 'main', path: '/dashboard/interview' }
             : { id: 'interview', label: 'Mock Interview', icon: '🎤', section: 'main', path: '/dashboard/interview' };
-            
+
         items.splice(4, 0, interviewItem);
 
         if (user?.role === 'admin') items.push({ id: 'admin', label: 'Admin', icon: '⚙', section: 'account', path: '/dashboard/admin' });
@@ -448,10 +524,10 @@ const AppContent: React.FC = () => {
         return (
             <div className="h-screen w-full flex flex-col bg-black overflow-hidden relative">
                 {showOnboarding && <Onboarding onComplete={() => setShowOnboarding(false)} />}
-                
+
                 {/* Header Container */}
                 <div className="relative z-[150] bg-black/80 backdrop-blur-xl border-b border-white/5 flex items-center pr-4">
-                    <button 
+                    <button
                         onClick={() => setMobileSidebarOpen(!mobileSidebarOpen)}
                         className="p-4 text-white/40 hover:text-gold transition-colors md:hidden"
                         aria-label="Toggle Menu"
@@ -478,14 +554,14 @@ const AppContent: React.FC = () => {
                     <AnimatePresence>
                         {mobileSidebarOpen && (
                             <>
-                                <motion.div 
+                                <motion.div
                                     initial={{ opacity: 0 }}
                                     animate={{ opacity: 1 }}
                                     exit={{ opacity: 0 }}
                                     onClick={() => setMobileSidebarOpen(false)}
                                     className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[200] md:hidden"
                                 />
-                                <motion.div 
+                                <motion.div
                                     initial={{ x: -300 }}
                                     animate={{ x: 0 }}
                                     exit={{ x: -300 }}
@@ -500,9 +576,9 @@ const AppContent: React.FC = () => {
                                     </div>
                                     <nav className="flex-1 overflow-y-auto p-4 space-y-1">
                                         {navItems.map(item => (
-                                            <NavLink 
-                                                key={item.id} 
-                                                to={item.path} 
+                                            <NavLink
+                                                key={item.id}
+                                                to={item.path}
                                                 onClick={() => setMobileSidebarOpen(false)}
                                                 className={({ isActive }) => `flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${isActive ? 'bg-gold/10 text-gold border border-gold/20' : 'text-white/40 hover:text-white hover:bg-white/5'}`}
                                             >
@@ -515,17 +591,17 @@ const AppContent: React.FC = () => {
                             </>
                         )}
                     </AnimatePresence>
-                    
+
                     {/* Main content area */}
                     <div className="flex-1 overflow-y-auto overflow-x-hidden relative transition-all duration-300 bg-[#080808]">
-                        <motion.main 
+                        <motion.main
                             initial={{ opacity: 0, y: 10 }}
                             animate={{ opacity: 1, y: 0 }}
                             transition={{ duration: 0.6, ease: "easeOut" }}
                             className="max-w-[1200px] mx-auto p-4 md:p-8 pb-20 md:pb-8"
                         >
                             <ErrorBoundary>
-                                <AppRoutes 
+                                <AppRoutes
                                     activities={activities}
                                     handleAddActivity={handleAddActivity}
                                     overviewTabNode={<OverviewTab activities={activities} loading={dataLoading} onAddActivity={handleAddActivity} onDeleteActivity={handleDeleteActivity} />}
@@ -546,7 +622,7 @@ const AppContent: React.FC = () => {
     // Default to catching everything else (Landing Page or redirects)
     return (
         <ErrorBoundary>
-            <AppRoutes 
+            <AppRoutes
                 activities={activities}
                 handleAddActivity={handleAddActivity}
                 overviewTabNode={<OverviewTab activities={activities} loading={dataLoading} onAddActivity={handleAddActivity} onDeleteActivity={handleDeleteActivity} />}

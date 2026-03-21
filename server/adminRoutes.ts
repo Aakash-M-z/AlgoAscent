@@ -2,7 +2,7 @@ import { Router, Request, Response } from 'express';
 import mongoose from 'mongoose';
 import {
     UserModel, ActivityModel, AdminLogModel, TaskModel,
-    FeatureFlagModel, NotificationModel
+    FeatureFlagModel, NotificationModel, InterviewSessionModel
 } from './models.js';
 
 const router = Router();
@@ -58,6 +58,53 @@ const getMockFeatures = () => ([
     { name: 'Mock Interviews', key: 'mock_interviews', enabled: false, description: 'Beta P2P interviews (Mocked)' },
     { name: 'Advanced Analytics', key: 'advanced_analytics', enabled: true, description: 'Pro charts for users (Mocked)' },
 ]);
+
+const getMockInterviewAnalytics = () => ({
+    kpis: {
+        totalUsers: 840,
+        averageScore: 72,
+        passRate: 64,
+        mostFailedTopics: 'Dynamic Programming'
+    },
+    recentActivity: [
+        { username: 'aakash', topic: 'Graphs', score: 85, timestamp: new Date(), status: 'Pass' },
+        { username: 'user123', topic: 'DP', score: 45, timestamp: new Date(Date.now() - 3600000), status: 'Fail' },
+        { username: 'dev_m', topic: 'Linked List', score: 92, timestamp: new Date(Date.now() - 7200000), status: 'Pass' },
+    ],
+    scoreDistribution: [
+        { range: '0-20', count: 5 },
+        { range: '21-40', count: 12 },
+        { range: '41-60', count: 25 },
+        { range: '61-80', count: 48 },
+        { range: '81-100', count: 32 }
+    ],
+    topicPerformance: [
+        { topic: 'Arrays', avgScore: 78, passRate: 82 },
+        { topic: 'Trees', avgScore: 65, passRate: 58 },
+        { topic: 'DP', avgScore: 42, passRate: 31 },
+        { topic: 'Graphs', avgScore: 58, passRate: 45 }
+    ],
+    weeklyTrends: [
+        { day: 'Mon', interviews: 12 },
+        { day: 'Tue', interviews: 18 },
+        { day: 'Wed', interviews: 15 },
+        { day: 'Thu', interviews: 22 },
+        { day: 'Fri', interviews: 30 },
+        { day: 'Sat', interviews: 25 },
+        { day: 'Sun', interviews: 10 }
+    ],
+    topUsers: [
+        { username: 'aakash', avgScore: 94, totalInterviews: 12 },
+        { username: 'top_coder', avgScore: 91, totalInterviews: 8 },
+        { username: 'algo_master', avgScore: 89, totalInterviews: 15 }
+    ],
+    insights: [
+        "Users struggle with Dynamic Programming (31% pass rate)",
+        "Array manipulation topics show highest competency",
+        "Average score dropped by 5% in the last 48 hours"
+    ],
+    isFallback: true
+});
 
 // ── 1. Advanced Analytics Dashboard ───────────────────────
 router.get('/analytics', async (req, res) => {
@@ -239,6 +286,161 @@ router.get('/logs', async (req, res) => {
         if (action) query.action = action;
         const logs = await AdminLogModel.find(query).sort({ createdAt: -1 }).limit(Number(limit));
         res.json(logs);
+    } catch (err: any) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ── 7. Interview Analytics ────────────────────────────────
+router.get('/interview-analytics', async (req, res) => {
+    if (!(req as any).dbConnected) {
+        return res.json(getMockInterviewAnalytics());
+    }
+
+    try {
+        const totalInterviews = await InterviewSessionModel.countDocuments();
+        if (totalInterviews === 0) return res.json(getMockInterviewAnalytics());
+
+        // Aggregate KPIs
+        const stats = await InterviewSessionModel.aggregate([
+            {
+                $group: {
+                    _id: null,
+                    avgScore: { $avg: "$score.overallScore" },
+                    totalUsers: { $addToSet: "$userId" }
+                }
+            }
+        ]);
+
+        const passCount = await InterviewSessionModel.countDocuments({ "score.overallScore": { $gte: 70 } });
+        const passRate = Math.round((passCount / totalInterviews) * 100);
+
+        // Topic Performance
+        const topicStats = await InterviewSessionModel.aggregate([
+            {
+                $group: {
+                    _id: "$type",
+                    avgScore: { $avg: "$score.overallScore" },
+                    count: { $sum: 1 },
+                    passes: { $sum: { $cond: [{ $gte: ["$score.overallScore", 70] }, 1, 0] } }
+                }
+            },
+            { $sort: { avgScore: 1 } }
+        ]);
+
+        const mostFailedTopic = topicStats.length > 0 ? topicStats[0]._id : "N/A";
+
+        // Recent Activity
+        const recentInterviews = await InterviewSessionModel.aggregate([
+            { $sort: { createdAt: -1 } },
+            { $limit: 5 },
+            {
+                $lookup: {
+                    from: "users",
+                    localField: "userId",
+                    foreignField: "_id",
+                    as: "user"
+                }
+            },
+            { $unwind: { path: "$user", preserveNullAndEmptyArrays: true } },
+            {
+                $project: {
+                    username: { $ifNull: ["$user.username", "Unknown"] },
+                    topic: "$type",
+                    score: "$score.overallScore",
+                    timestamp: "$createdAt",
+                    status: { $cond: [{ $gte: ["$score.overallScore", 70] }, "Pass", "Fail"] }
+                }
+            }
+        ]);
+
+        // Score Distribution
+        const scoreDist = await InterviewSessionModel.aggregate([
+            {
+                $bucket: {
+                    groupBy: "$score.overallScore",
+                    boundaries: [0, 21, 41, 61, 81, 101],
+                    default: "Other",
+                    output: { count: { $sum: 1 } }
+                }
+            }
+        ]);
+
+        // Weekly Trends
+        const sevenDaysAgo = new Date();
+        sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+        const weeklyTrends = await InterviewSessionModel.aggregate([
+            { $match: { createdAt: { $gte: sevenDaysAgo } } },
+            {
+                $group: {
+                    _id: { $dayOfWeek: "$createdAt" },
+                    interviews: { $sum: 1 }
+                }
+            },
+            { $sort: { "_id": 1 } }
+        ]);
+
+        const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+        const formattedTrends = weeklyTrends.map(w => ({
+            day: days[w._id - 1],
+            interviews: w.interviews
+        }));
+
+        // Top Users
+        const topUsers = await InterviewSessionModel.aggregate([
+            {
+                $group: {
+                    _id: "$userId",
+                    avgScore: { $avg: "$score.overallScore" },
+                    totalInterviews: { $sum: 1 }
+                }
+            },
+            { $sort: { avgScore: -1 } },
+            { $limit: 10 },
+            {
+                $lookup: {
+                    from: "users",
+                    localField: "_id",
+                    foreignField: "_id",
+                    as: "user"
+                }
+            },
+            { $unwind: { path: "$user", preserveNullAndEmptyArrays: true } },
+            {
+                $project: {
+                    username: { $ifNull: ["$user.username", "Shadow User"] },
+                    avgScore: { $round: ["$avgScore", 1] },
+                    totalInterviews: 1
+                }
+            }
+        ]);
+
+        res.json({
+            kpis: {
+                totalUsers: stats[0]?.totalUsers.length || 0,
+                averageScore: Math.round(stats[0]?.avgScore || 0),
+                passRate,
+                mostFailedTopics: mostFailedTopic
+            },
+            recentActivity: recentInterviews,
+            scoreDistribution: scoreDist.map((d, i) => ({
+                range: `${[0, 21, 41, 61, 81][i]}-${[20, 40, 60, 80, 100][i]}`,
+                count: d.count
+            })),
+            topicPerformance: topicStats.map(t => ({
+                topic: t._id,
+                avgScore: Math.round(t.avgScore),
+                passRate: Math.round((t.passes / t.count) * 100)
+            })),
+            weeklyTrends: formattedTrends,
+            topUsers,
+            insights: [
+                `Users struggle most with ${mostFailedTopic}`,
+                `System competence level is currently at ${Math.round(stats[0]?.avgScore || 0)}%`,
+                `High engagement detected in ${topicStats.sort((a,b) => b.count - a.count)[0]?._id || 'N/A'}`
+            ],
+            isFallback: false
+        });
     } catch (err: any) {
         res.status(500).json({ error: err.message });
     }
