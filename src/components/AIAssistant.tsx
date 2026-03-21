@@ -275,11 +275,12 @@ const AIAssistant: React.FC<Props> = ({ activities, username }) => {
             } else {
                 throw new Error('No reply from AI');
             }
-        } catch (err) {
-            console.error('AI Chat Error:', err);
+        } catch (err: any) {
+            console.error('AI Chat Error:', err?.message || err);
             // Fallback to old basic matching if backend fails
             const reply = generateResponse(text, activities, username);
-            setMessages(m => [...m, { id: Date.now().toString(), role: 'ai', text: reply, ts: new Date() }]);
+            const userFriendlyMsg = `⚠️ **Offline Mode** (API unavailable)\n\n${reply}`;
+            setMessages(m => [...m, { id: Date.now().toString(), role: 'ai', text: userFriendlyMsg, ts: new Date() }]);
         } finally {
             setTyping(false);
         }

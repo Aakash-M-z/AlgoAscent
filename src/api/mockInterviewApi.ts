@@ -36,7 +36,7 @@ export const mockInterviewApi = {
         const res = await api.post('/interview/evaluate-approach', payload);
         return res.data;
     },
-    runCode: async (payload: { code: string, language: string, questionText: string, functionName: string }) => {
+    runCode: async (payload: { code: string, language: string, questionText: string, functionName: string, testCases?: any[] }) => {
         const res = await api.post('/interview/run', payload);
         return res.data;
     }
