@@ -1,8 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { motion, AnimatePresence } from 'framer-motion';
+import { adminApi } from '../api/adminApi';
 
 // Import Admin Sub-Components
+// ... (omitted same imports)
 import UsersTable from '../features/admin/components/UsersTable';
 import AdvancedAnalytics from '../features/admin/components/AdvancedAnalytics';
 import AIUsageMonitoring from '../features/admin/components/AIUsageMonitoring';
@@ -16,6 +18,15 @@ type AdminTab = 'users' | 'analytics' | 'ai' | 'security' | 'system';
 const AdminPanel = () => {
     const { user } = useAuth();
     const [activeTab, setActiveTab] = useState<AdminTab>('analytics');
+    const [isOffline, setIsOffline] = useState(false);
+
+    useEffect(() => {
+        adminApi.getHealthDetails().then((data: any) => {
+            if (data.isFallback || data.dbStatus.includes('Disconnected') || data.dbStatus.includes('Fallback')) {
+                setIsOffline(true);
+            }
+        }).catch(() => setIsOffline(true));
+    }, []);
 
     const tabs: {id: AdminTab, label: string, icon: string}[] = [
         { id: 'analytics', label: 'Analytics', icon: '📈' },
@@ -31,14 +42,33 @@ const AdminPanel = () => {
 
     return (
         <div className="section-gap animate-fadeIn min-h-[80vh]">
+            <AnimatePresence>
+                {isOffline && (
+                    <motion.div 
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: 'auto', opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        className="bg-gold/10 border border-gold/20 rounded-2xl p-4 mb-8 flex items-center gap-4 overflow-hidden"
+                    >
+                        <div className="w-10 h-10 rounded-xl bg-gold/20 flex items-center justify-center flex-shrink-0">
+                            <span className="text-xl">⚠️</span>
+                        </div>
+                        <div className="flex-1">
+                            <h4 className="text-gold font-bold text-sm uppercase tracking-wider">Database Offline Mode</h4>
+                            <p className="text-white/40 text-xs mt-1">MongoDB is currently unavailable. Using localized fallback data for analytics and logs. Real-time edits may be restricted.</p>
+                        </div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+
             <div className="flex justify-between items-end border-b border-white/[0.08] pb-6 mb-8">
                 <div>
                     <h2 className="text-3xl font-black bg-clip-text text-transparent bg-gradient-to-r from-[#D4AF37] to-[#FFF8DC] tracking-tight">Enterprise Control Panel</h2>
-                    <p className="text-gray-400 mt-2 text-sm">Welcome back, <span className="font-bold text-white">{user.username}</span>. System is operating normally.</p>
+                    <p className="text-gray-400 mt-2 text-sm">Welcome back, <span className="font-bold text-white">{user.username}</span>. {isOffline ? 'System running in fallback mode.' : 'System is operating normally.'}</p>
                 </div>
                 <div className="hidden md:flex gap-3">
-                    <span className="bg-green-500/10 text-green-500 border border-green-500/20 px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-2">
-                        <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span> ALL SYSTEMS OPERATIONAL
+                    <span className={`${isOffline ? 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20' : 'bg-green-500/10 text-green-500 border-green-500/20'} border px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-2`}>
+                        <span className={`w-2 h-2 rounded-full ${isOffline ? 'bg-yellow-500' : 'bg-green-500 animate-pulse'}`}></span> {isOffline ? 'PARTIAL SERVICES ACTIVE' : 'ALL SYSTEMS OPERATIONAL'}
                     </span>
                 </div>
             </div>
