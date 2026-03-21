@@ -23,6 +23,7 @@
     "vite": "^7.0.4"
   },
   "dependencies": {
+    "@monaco-editor/react": "^4.7.0",
     "@react-oauth/google": "^0.13.4",
     "@sendgrid/mail": "^8.1.5",
     "@tailwindcss/postcss": "^4.1.11",

@@ -401,24 +401,25 @@ const QuickAddProblem: React.FC<QuickAddProblemProps> = ({ onAdd }) => {
         )}
       </AnimatePresence>
 
-      {/* ── Log controls ── */}
-      <div style={{ display: 'flex', gap: '12px', marginTop: '16px', flexWrap: 'wrap', alignItems: 'flex-end' }}>
-        <div>
-          <div className="kpi-sub" style={{ marginBottom: '5px' }}>Time (min)</div>
+      {/* ── Inputs row: time + solved toggle ── */}
+      <div style={{ display: 'flex', gap: '10px', marginTop: '14px', flexWrap: 'wrap', alignItems: 'center' }}>
+        {/* Time input */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 12px', borderRadius: '10px', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)', flex: '0 0 auto' }}>
+          <Clock size={13} color="#555" />
           <input
             type="number" value={timeSpent} min={5} max={300}
             onChange={e => setTimeSpent(Number(e.target.value))}
             style={{
-              width: '80px', padding: '8px 12px', borderRadius: '9px',
-              background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)',
+              width: '52px', background: 'none', border: 'none',
               color: '#EAEAEA', fontSize: '0.875rem', outline: 'none', fontFamily: 'Inter, sans-serif',
             }}
-            onFocus={e => { e.currentTarget.style.borderColor = 'rgba(212,175,55,0.4)'; }}
-            onBlur={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)'; }}
+            onFocus={e => { (e.currentTarget.parentElement as HTMLElement).style.borderColor = 'rgba(212,175,55,0.4)'; }}
+            onBlur={e => { (e.currentTarget.parentElement as HTMLElement).style.borderColor = 'rgba(255,255,255,0.08)'; }}
           />
+          <span style={{ fontSize: '0.72rem', color: '#555' }}>min</span>
         </div>
         {/* Solved toggle */}
-        <div style={{ display: 'flex', gap: '4px', padding: '3px', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: '10px' }}>
+        <div style={{ display: 'flex', gap: '4px', padding: '3px', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: '10px', flex: '0 0 auto' }}>
           {[true, false].map(v => (
             <button key={String(v)} onClick={() => setSolved(v)}
               style={{
@@ -432,16 +433,41 @@ const QuickAddProblem: React.FC<QuickAddProblemProps> = ({ onAdd }) => {
             </button>
           ))}
         </div>
-        <button
-          id="qap-log-btn"
-          onClick={handleLog}
-          disabled={!selected || saving}
-          className="btn-gold"
-          style={{ padding: '9px 22px', fontSize: '0.875rem', opacity: selected && !saving ? 1 : 0.4, cursor: selected && !saving ? 'pointer' : 'not-allowed', marginLeft: 'auto' }}
-        >
-          {saving ? 'Saving…' : 'Log Session'}
-        </button>
       </div>
+
+      {/* ── Log Session button — full width, prominent ── */}
+      <motion.button
+        id="qap-log-btn"
+        onClick={handleLog}
+        disabled={!selected || saving}
+        whileHover={selected && !saving ? { scale: 1.015, y: -1 } : {}}
+        whileTap={selected && !saving ? { scale: 0.98 } : {}}
+        style={{
+          marginTop: '14px', width: '100%',
+          padding: '13px 20px', borderRadius: '12px', fontSize: '0.9rem', fontWeight: 700,
+          cursor: selected && !saving ? 'pointer' : 'not-allowed',
+          border: 'none', letterSpacing: '0.04em',
+          background: selected && !saving
+            ? 'linear-gradient(135deg, #D4AF37 0%, #B8960C 50%, #D4AF37 100%)'
+            : 'rgba(255,255,255,0.04)',
+          color: selected && !saving ? '#0B0B0B' : '#333',
+          boxShadow: selected && !saving ? '0 4px 20px rgba(212,175,55,0.35), 0 0 0 1px rgba(212,175,55,0.2)' : 'none',
+          transition: 'background 0.2s, box-shadow 0.2s, color 0.2s',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
+        }}
+      >
+        {saving ? (
+          <>
+            <span style={{ width: '14px', height: '14px', borderRadius: '50%', border: '2px solid rgba(0,0,0,0.3)', borderTopColor: '#0B0B0B', animation: 'spin 0.7s linear infinite', display: 'inline-block' }} />
+            Saving…
+          </>
+        ) : (
+          <>
+            <Zap size={15} />
+            Log Session
+          </>
+        )}
+      </motion.button>
 
       {/* ── Recently solved ── */}
       {recent.length > 0 && (

@@ -26,6 +26,10 @@ export const adminApi = {
         const res = await api.get('/admin/analytics');
         return res.data;
     },
+    getInterviewAnalytics: async () => {
+        const res = await api.get('/admin/interview-analytics');
+        return res.data;
+    },
 
     // 3. AI Monitoring
     getAiMonitoring: async () => {

@@ -1025,3 +1025,17 @@ textarea,
     grid-template-columns: 1fr !important;
   }
 }
+
+/* ── Spin keyframe (used by QuickAddProblem saving spinner) ── */
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ── Heatmap 2-col grid responsive ──────────────────────────── */
+@media (max-width: 768px) {
+  .heatmap-grid {
+    grid-template-columns: 1fr !important;
+  }
+}
