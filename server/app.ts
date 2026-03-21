@@ -5,6 +5,7 @@ import { storage } from './storage.js';
 import { InsertUser, InsertActivity, InsertTask } from '../shared/schema.js';
 import { signToken, verifyToken, extractBearer, JwtPayload } from './jwt.js';
 import adminRoutes from './adminRoutes.js';
+import userRoutes from './userRoutes.js';
 import interviewRoutes from './interviewRoutes.js';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -140,6 +141,9 @@ api.post('/auth/google', async (req, res) => {
         res.status(500).json({ error: 'Server error. Please try again.' });
     }
 });
+
+// Profile routes
+api.use('/user', userRoutes);
 
 // ── User routes ──────────────────────────────────────────────────
 // IMPORTANT: specific paths must come before wildcard /:id
