@@ -160,13 +160,42 @@ api.get('/users/by-username/:username', async (req, res) => {
 });
 
 // Get user activities — must be before /users/:id
-api.get('/users/:userId/activities', async (req, res) => {
+api.get('/users/:id/activities', async (req, res) => {
     try {
-        const activities = await storage.getUserActivities(req.params.userId);
-        res.json(activities);
-    } catch (error) {
-        console.error('Get activities error:', error);
-        res.status(500).json({ error: 'Server error. Please try again.' });
+        const id = req.params.id;
+        console.log(`[GET] /users/${id}/activities - Incoming request`);
+
+        // 1. Validate: Check if user ID is valid (MongoDB ObjectId format)
+        if (!id || !/^[0-9a-fA-F]{24}$/.test(id)) {
+            console.warn(`[Validation Error] Invalid user ID format received: ${id}`);
+            return res.status(400).json({ error: 'Invalid user ID format' });
+        }
+
+        // 2. Add timeout handling using Promise.race (Optimize query blocking operations)
+        const timeoutPromise = new Promise((_, reject) =>
+            setTimeout(() => reject(new Error('Query Timeout')), 8000)
+        );
+
+        // 3. Ensure a response is always returned and handle unhandled rejections internally
+        const activitiesPromise = storage.getUserActivities(id);
+        const activities = await Promise.race([activitiesPromise, timeoutPromise]) as any[];
+
+        // 5. Log DB query results
+        console.log(`[DB] Successfully fetched ${activities?.length || 0} activities for user: ${id}`);
+        
+        // Return 200 OK with empty array if no activities (fixes frontend 404 error)
+        return res.json(activities || []);
+    } catch (error: any) {
+        // 6. Log errors with stack trace
+        console.error(`[Error] /users/${req.params.id}/activities:`, error.message);
+        console.error(error.stack);
+
+        if (error.message === 'Query Timeout') {
+            return res.status(504).json({ error: 'Database query timed out' });
+        }
+
+        // 7. Return 500 for server errors instead of 503
+        return res.status(500).json({ error: 'Internal Server Error while fetching activities. Please try again later.' });
     }
 });
 
