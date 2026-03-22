@@ -178,6 +178,17 @@ const OverviewTab: React.FC<{
     const todaySolved = todayActivities.filter(a => a.problemSolved).length;
     const todayMins = todayActivities.reduce((s, a) => s + a.duration, 0);
 
+    // Weekly goal (target: 5 problems/week)
+    const WEEKLY_GOAL = 5;
+    const weekStart = new Date(Date.now() - 6 * 864e5).toISOString().slice(0, 10);
+    const weekSolved = displayActivities.filter(a => a.date.slice(0, 10) >= weekStart && a.problemSolved).length;
+    const weekPct = Math.min(100, Math.round((weekSolved / WEEKLY_GOAL) * 100));
+
+    // Avg per day (last 30 days)
+    const last30 = displayActivities.filter(a => Date.now() - new Date(a.date).getTime() < 30 * 864e5);
+    const activeDays30 = new Set(last30.map(a => a.date.slice(0, 10))).size;
+    const avgPerDay = activeDays30 > 0 ? (last30.filter(a => a.problemSolved).length / 30).toFixed(1) : '0.0';
+
     // Streak reminder
     const hasActivityToday = activities.some(a => a.date.slice(0, 10) === todayKey);
     const yesterdayKey = new Date(Date.now() - 864e5).toISOString().slice(0, 10);
@@ -261,10 +272,52 @@ const OverviewTab: React.FC<{
                                     <span style={{ fontSize: '0.75rem', color: '#555' }}>Time</span>
                                     <span style={{ fontSize: '1rem', fontWeight: 800, color: todayMins > 0 ? '#D4AF37' : '#333' }}>{isNewUser ? '—' : `${todayMins}m`}</span>
                                 </div>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                    <span style={{ fontSize: '0.75rem', color: '#555' }}>Avg/day</span>
+                                    <span style={{ fontSize: '0.9rem', fontWeight: 700, color: '#D4AF37' }}>{isNewUser ? '—' : avgPerDay}</span>
+                                </div>
                             </div>
                             {!isNewUser && todaySolved === 0 && (
                                 <div style={{ marginTop: '10px', fontSize: '0.68rem', color: '#444', textAlign: 'center', padding: '6px', borderRadius: '7px', background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.04)' }}>
                                     Nothing logged yet today
+                                </div>
+                            )}
+                        </motion.div>
+
+                        {/* Weekly Goal */}
+                        <motion.div
+                            initial={{ opacity: 0, y: 8 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ delay: 0.22, duration: 0.35 }}
+                            className="card-dark"
+                            style={{ padding: '14px 16px', borderColor: weekPct >= 100 ? 'rgba(34,197,94,0.25)' : 'rgba(255,255,255,0.06)' }}
+                        >
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                    <span style={{ fontSize: '0.85rem' }}>🎯</span>
+                                    <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#888', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Weekly Goal</span>
+                                </div>
+                                <span style={{ fontSize: '0.72rem', fontWeight: 700, color: weekPct >= 100 ? '#22c55e' : '#D4AF37' }}>
+                                    {isNewUser ? '—' : `${weekSolved}/${WEEKLY_GOAL}`}
+                                </span>
+                            </div>
+                            <div style={{ height: '5px', background: 'rgba(255,255,255,0.05)', borderRadius: '999px', overflow: 'hidden' }}>
+                                <motion.div
+                                    initial={{ width: 0 }}
+                                    animate={{ width: isNewUser ? '0%' : `${weekPct}%` }}
+                                    transition={{ duration: 0.9, ease: [0.4, 0, 0.2, 1], delay: 0.3 }}
+                                    style={{
+                                        height: '100%', borderRadius: '999px',
+                                        background: weekPct >= 100
+                                            ? 'linear-gradient(90deg, #22c55e, #16a34a)'
+                                            : 'linear-gradient(90deg, #D4AF37, #B8960C)',
+                                        boxShadow: weekPct >= 100 ? '0 0 8px rgba(34,197,94,0.4)' : '0 0 8px rgba(212,175,55,0.3)',
+                                    }}
+                                />
+                            </div>
+                            {!isNewUser && weekPct >= 100 && (
+                                <div style={{ marginTop: '8px', fontSize: '0.68rem', color: '#22c55e', textAlign: 'center', fontWeight: 600 }}>
+                                    ✓ Goal reached this week!
                                 </div>
                             )}
                         </motion.div>

@@ -1,4 +1,4 @@
-import { Router } from 'express';
+﻿import { Router } from 'express';
 import mongoose from 'mongoose';
 import { InterviewSessionModel } from './models.js';
 import { extractBearer, verifyToken } from './jwt.js';
@@ -6,7 +6,7 @@ import axios from 'axios';
 
 const router = Router();
 
-// ── Auth Middleware ──────────────────────────────────────────
+// â”€â”€ Auth Middleware â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 router.use((req, res, next) => {
     const token = extractBearer(req.headers.authorization as string || '');
     if (!token) { res.status(401).json({ error: 'Unauthorized' }); return; }
@@ -36,7 +36,7 @@ interface Question {
     company?: string[];
 }
 
-// ── Expanded Question Banks ──────────────────────────────────
+// â”€â”€ Expanded Question Banks â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const DSA_QUESTIONS: Question[] = [
     {
         text: "Two Sum: Given an array of integers nums and an integer target, return indices of the two numbers such that they add up to target. You may assume that each input would have exactly one solution, and you may not use the same element twice.",
@@ -148,7 +148,7 @@ const SYSTEM_DESIGN_QUESTIONS: Question[] = [
         }
     },
     {
-        text: "Design Instagram Scale: Design a photo-sharing platform with 500M daily active users. The system should support: user uploads (photos/videos), feed generation (real-time + algorithmic), follow relationships, likes/comments, and push notifications. Focus on the feed generation system — pull vs push model and fan-out strategies.",
+        text: "Design Instagram Scale: Design a photo-sharing platform with 500M daily active users. The system should support: user uploads (photos/videos), feed generation (real-time + algorithmic), follow relationships, likes/comments, and push notifications. Focus on the feed generation system â€” pull vs push model and fan-out strategies.",
         functionName: "design", params: [], testCases: [], difficulty: 'Hard', tags: ['System Design', 'Social Media', 'Feed Systems'],
         company: ['Meta', 'Instagram', 'Snap'],
         initialCode: {
@@ -224,7 +224,7 @@ const CN_QUESTIONS: Question[] = [
     }
 ];
 
-// ── Code Wrapper Generator ──────────────────────────────────
+// â”€â”€ Code Wrapper Generator â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const generateWrapper = (lang: string, code: string, question: Question) => {
     const { functionName, testCases } = question;
     const testCasesJson = JSON.stringify(testCases);
@@ -290,7 +290,7 @@ const getAiConfig = () => ({
     }
 });
 
-// ── POST /api/interview/start ────────────────────────────────
+// â”€â”€ POST /api/interview/start â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 router.post('/start', (req, res) => {
     const { type } = req.body;
     let questions = DSA_QUESTIONS;
@@ -312,7 +312,7 @@ router.post('/start', (req, res) => {
     });
 });
 
-// ── POST /api/interview/evaluate-approach ──────────────────
+// â”€â”€ POST /api/interview/evaluate-approach â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 router.post('/evaluate-approach', async (req, res) => {
     try {
         const { question, approach } = req.body;
@@ -351,227 +351,243 @@ import os from 'os';
 
 const execAsync = util.promisify(exec);
 
-// ── POST /api/interview/run ─────────────────────────────────
+// â”€â”€ POST /api/interview/run â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 router.post('/run', async (req, res) => {
     try {
-        console.log("REQUEST:", {
-            language: req.body.language,
-            functionName: req.body.functionName,
-            testCasesCount: req.body.testCases?.length
+        // Destructure â€” extra fields like questionText are silently ignored
+        let { code, language, testCases, functionName } = req.body;
+
+        console.log('[/run] body:', {
+            language,
+            functionName,
+            codeLength: code?.length,
+            testCasesCount: Array.isArray(testCases) ? testCases.length : testCases,
         });
 
-        const { code, language, testCases, functionName } = req.body;
-
-        if (!code || !language || !testCases || !Array.isArray(testCases)) {
-            return res.status(400).json({ 
-                error: "Missing required fields", 
-                details: "code, language, and testCases (array) are required in request body" 
-            });
+        // â”€â”€ Validation â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        if (!code || typeof code !== 'string' || !code.trim()) {
+            res.status(400).json({ error: 'Validation Error', details: 'code is required and must be a non-empty string' }); return;
         }
 
+        if (testCases !== undefined && !Array.isArray(testCases)) {
+            res.status(400).json({ error: 'Validation Error', details: 'testCases must be an array' }); return;
+        }
+
+        testCases = Array.isArray(testCases) ? testCases : [];
+
+        if (testCases.length > 0 && !functionName) {
+            res.status(400).json({ error: 'Validation Error', details: 'functionName is required when testCases are provided' }); return;
+        }
+
+        // â”€â”€ Language normalisation â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        const langMap: Record<string, string> = {
+            python: 'python3',
+            python3: 'python3',
+            '71': 'python3',
+            javascript: 'javascript',
+            js: 'javascript',
+            '63': 'javascript',
+            cpp: 'cpp',
+            'c++': 'cpp',
+            java: 'java',
+        };
+
+        const normalizedLang = langMap[(language ?? '').toLowerCase()];
+
+        if (!normalizedLang) {
+            res.status(400).json({
+                error: 'Validation Error',
+                details: `Unsupported language: "${language}". Accepted: javascript, python3, java, cpp`,
+            }); return;
+        }
+
+        // Short-circuit: no test cases
         if (testCases.length === 0) {
-            return res.json({ results: [] });
+            res.json({ results: [], summary: { passed: 0, total: 0 } }); return;
         }
 
-        const isJs = language === 'javascript' || language === '63';
-        const isPy = language === 'python' || language === '71';
+        const isJs = normalizedLang === 'javascript';
+        const isPy = normalizedLang === 'python3';
 
+        // Java / C++ â€” graceful stub (no 400, no crash)
         if (!isJs && !isPy) {
-            return res.status(400).json({ 
-                error: "Execution failed", 
-                details: "Only JavaScript and Python are supported for execution right now" 
-            });
-        }
-
-        const ext = isJs ? 'js' : 'py';
-        const tempFilePath = path.join(os.tmpdir(), `temp_${Date.now()}_${Math.random().toString(36).substr(2, 6)}.${ext}`);
-
-        let runnerCode = "";
-        const escapedTestCases = JSON.stringify(testCases).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-
-        if (isJs) {
-            runnerCode = `
-${code}
-
-const testCases = JSON.parse('${escapedTestCases}');
-const results = [];
-let passedCount = 0;
-
-testCases.forEach((tc, i) => {
-    try {
-        const input = tc.input;
-        const expected = tc.expectedOutput;
-        
-        console.log(\`\\n--- Test Case \${i + 1} ---\`);
-        console.log(\`Input: \${JSON.stringify(input.length === 1 ? input[0] : input)}\`);
-        console.log(\`Expected Output: \${JSON.stringify(expected)}\`);
-        
-        // Extract first element if length is 1, otherwise spread
-        const output = input.length === 1 ? ${functionName}(input[0]) : ${functionName}(...input);
-        
-        console.log(\`Actual Output: \${JSON.stringify(output)}\`);
-        
-        const passed = JSON.stringify(output) === JSON.stringify(expected);
-        if (passed) passedCount++;
-        
-        console.log(\`Status: \${passed ? 'Passed' : 'Failed'}\`);
-        
-        results.push({
-            input: input,
-            expected: expected,
-            output: output,
-            status: passed ? "Passed" : "Wrong Answer"
-        });
-    } catch (e) {
-        console.log(\`Actual Output: \${e.message}\`);
-        console.log(\`Status: Failed\`);
-        results.push({
-            input: tc.input,
-            expected: tc.expectedOutput,
-            error: e.message,
-            status: "Error"
-        });
-    }
-});
-console.log("\\n" + JSON.stringify({ 
-    results, 
-    summary: { passed: passedCount, total: testCases.length } 
-}));
-`;
-        } else {
-            runnerCode = `
-import json, sys
-sys.stdout.reconfigure(encoding='utf-8')
-
-${code}
-
-def run_tests():
-    testCases = json.loads('${escapedTestCases}')
-    results = []
-    passedCount = 0
-    
-    for i, tc in enumerate(testCases):
-        try:
-            input_val = tc["input"]
-            expected = tc["expectedOutput"]
-            
-            print(f"\\n--- Test Case {i + 1} ---")
-            print(f"Input: {repr(input_val[0]) if len(input_val) == 1 else repr(input_val)}")
-            print(f"Expected Output: {repr(expected)}")
-            
-            # Extract first element if length is 1
-            if len(input_val) == 1:
-                output = ${functionName}(input_val[0])
-            else:
-                output = ${functionName}(*input_val)
-                
-            print(f"Actual Output: {repr(output)}")
-            
-            passed = output == expected
-            if passed: 
-                passedCount += 1
-                
-            print(f"Status: {'Passed' if passed else 'Failed'}")
-            
-            results.append({
-                "input": input_val,
-                "expected": expected,
-                "output": output,
-                "status": "Passed" if passed else "Wrong Answer"
-            })
-        except Exception as e:
-            print(f"Actual Output: {str(e)}")
-            print(f"Status: Failed")
-            results.append({
-                "input": tc["input"],
-                "expected": tc["expectedOutput"],
-                "error": str(e),
-                "status": "Error"
-            })
-            
-    print("\\n" + json.dumps({ 
-        "results": results, 
-        "summary": { "passed": passedCount, "total": len(testCases) } 
-    }))
-
-if __name__ == "__main__":
-    run_tests()
-`;
-        }
-
-        await fs.writeFile(tempFilePath, runnerCode);
-
-        const command = isJs ? `node "${tempFilePath}"` : `python "${tempFilePath}"`;
-
-        try {
-            const { stdout, stderr } = await execAsync(command, { timeout: 3000 });
-            
-            await fs.unlink(tempFilePath).catch(() => {});
-
-            if (stderr && !stdout) {
-                return res.json({
-                    results: testCases.map(tc => ({
-                        input: tc.input,
-                        expected: tc.expectedOutput,
-                        error: stderr.split('\\n')[0] || "Syntax/Runtime Error",
-                        status: "Error"
-                    }))
-                });
-            }
-
-            try {
-                // Find the JSON block from output (helps ignore unexpected prints inside code)
-                const outLines = stdout.trim().split('\n');
-                const lastLine = outLines[outLines.length - 1];
-                const parsed = JSON.parse(lastLine);
-                
-                // Return both the structured results AND the raw console output (minus the JSON string)
-                return res.json({
-                    ...parsed,
-                    stdout: stdout.replace(lastLine, '').trim()
-                });
-            } catch (err: any) {
-                console.error("Parse Error:", err);
-                return res.json({
-                    results: testCases.map(tc => ({
-                        input: tc.input,
-                        expected: tc.expectedOutput,
-                        error: "Failed to parse structured output. Keep your code clean from outer prints.",
-                        status: "Error"
-                    }))
-                });
-            }
-            
-        } catch (execErr: any) {
-            await fs.unlink(tempFilePath).catch(() => {});
-            
-            if (execErr.killed || execErr.signal === 'SIGTERM') {
-                return res.json({
-                    results: testCases.map(tc => ({
-                        input: tc.input,
-                        expected: tc.expectedOutput,
-                        error: "Time Limit Exceeded (3s)",
-                        status: "Time Limit Exceeded"
-                    }))
-                });
-            }
-            
-            return res.json({
-                results: testCases.map(tc => ({
+            res.json({
+                results: testCases.map((tc: any) => ({
                     input: tc.input,
                     expected: tc.expectedOutput,
-                    error: execErr.stderr ? execErr.stderr.split('\\n').slice(0,3).join(' ') : (execErr.message || "Runtime Error"),
-                    status: "Error"
-                }))
-            });
+                    error: `${normalizedLang} execution is not available in this environment. Switch to JavaScript or Python.`,
+                    status: 'Error',
+                })),
+                summary: { passed: 0, total: testCases.length },
+            }); return;
+        }
+
+        // â”€â”€ Build runner script â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        const ext = isJs ? 'js' : 'py';
+        const tempFilePath = path.join(
+            os.tmpdir(),
+            `run_${Date.now()}_${Math.random().toString(36).slice(2, 8)}.${ext}`
+        );
+
+        // Base64-encode test cases to avoid any quote/escape issues in the injected script
+        const tcB64 = Buffer.from(JSON.stringify(testCases)).toString('base64');
+        const fnName = String(functionName);
+
+        let runnerCode: string;
+
+        if (isJs) {
+            // JS runner: base64-decode test cases, call function, emit sentinel JSON
+            runnerCode = [
+                code,
+                '',
+                `const __tc = JSON.parse(Buffer.from('${tcB64}', 'base64').toString('utf8'));`,
+                'const __results = [];',
+                'let __passed = 0;',
+                '__tc.forEach((tc) => {',
+                '  try {',
+                '    const inp = Array.isArray(tc.input) ? tc.input : [tc.input];',
+                '    const exp = tc.expectedOutput;',
+                '    // Always spread — single arg [2] becomes fn(2), multi [arr,k] becomes fn(arr,k)',
+                `    const out = ${fnName}(...inp);`,
+                '    const ok = JSON.stringify(out) === JSON.stringify(exp);',
+                '    if (ok) __passed++;',
+                "    __results.push({ input: inp, expected: exp, output: out, status: ok ? 'Passed' : 'Wrong Answer' });",
+                '  } catch (e) {',
+                "    __results.push({ input: tc.input, expected: tc.expectedOutput, error: e.message, status: 'Error' });",
+                '  }',
+                '});',
+                "process.stdout.write('\\n###RESULT###' + JSON.stringify({ results: __results, summary: { passed: __passed, total: __tc.length } }) + '###END###\\n');",
+            ].join('\n');
+        } else {
+            // Python runner: base64-decode test cases, always unpack with *, emit sentinel JSON
+            runnerCode = [
+                'import json, sys, base64',
+                'import io',
+                'sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")',
+                '',
+                code,
+                '',
+                'def __run_tests():',
+                `    raw = base64.b64decode('${tcB64}').decode('utf-8')`,
+                '    __tc = json.loads(raw)',
+                '    __results = []',
+                '    __passed = 0',
+                '    for tc in __tc:',
+                '        try:',
+                '            inp = tc["input"] if isinstance(tc["input"], list) else [tc["input"]]',
+                '            exp = tc["expectedOutput"]',
+                '            # Always unpack — [2] -> fn(2), [[1,2],9] -> fn([1,2], 9)',
+                `            out = ${fnName}(*inp)`,
+                '            ok = out == exp',
+                '            if ok:',
+                '                __passed += 1',
+                '            __results.append({',
+                '                "input": inp, "expected": exp, "output": out,',
+                '                "status": "Passed" if ok else "Wrong Answer"',
+                '            })',
+                '        except Exception as e:',
+                '            __results.append({',
+                '                "input": tc.get("input"), "expected": tc.get("expectedOutput"),',
+                '                "error": str(e), "status": "Error"',
+                '            })',
+                '    payload = json.dumps({"results": __results, "summary": {"passed": __passed, "total": len(__tc)}})',
+                '    sys.stdout.write("\\n###RESULT###" + payload + "###END###\\n")',
+                '    sys.stdout.flush()',
+                '',
+                'if __name__ == "__main__":',
+                '    __run_tests()',
+            ].join('\n');
+        }
+
+        await fs.writeFile(tempFilePath, runnerCode, 'utf8');
+
+        // Detect Python interpreter: Windows uses "python", Unix uses "python3"
+        const pyInterp = process.platform === "win32" ? "python" : "python3";
+        const command = isJs ? `node "${tempFilePath}"` : `${pyInterp} "${tempFilePath}"`;
+
+        try {
+            const execEnv = { ...process.env, PYTHONIOENCODING: "utf-8", PYTHONUTF8: "1" };
+            const { stdout, stderr } = await execAsync(command, { timeout: 5000, env: execEnv });
+            await fs.unlink(tempFilePath).catch(() => { });
+
+            // Normalize line endings (Windows \r\n → \n) before parsing
+            const out = stdout.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+
+            // Extract structured result block — immune to user print() noise
+            const match = out.match(/###RESULT###([\s\S]+?)###END###/);
+            if (match) {
+                let parsed: any;
+                try {
+                    parsed = JSON.parse(match[1].trim());
+                } catch (parseErr: any) {
+                    console.error('[/run] JSON parse failed:', parseErr.message, '| raw:', match[1].slice(0, 200));
+                    res.json({
+                        results: testCases.map((tc: any) => ({
+                            input: tc.input,
+                            expected: tc.expectedOutput,
+                            error: 'Failed to parse execution output',
+                            status: 'Error',
+                        })),
+                        summary: { passed: 0, total: testCases.length },
+                        stderr: match[1].slice(0, 500),
+                    }); return;
+                }
+                // Attach any user stdout (everything outside the sentinel block)
+                const userStdout = out.replace(/###RESULT###[\s\S]+?###END###/, '').trim();
+                res.json({ ...parsed, stdout: userStdout }); return;
+            }
+
+            // No sentinel found — syntax/runtime error before our wrapper ran
+            const errText = (stderr || stdout || 'Unknown execution error')
+                .replace(/\r\n/g, '\n')
+                .split('\n')
+                .filter((l: string) => l.trim())
+                .slice(0, 6)
+                .join('\n');
+
+            console.error('[/run] No sentinel in output. stderr:', stderr?.slice(0, 300));
+            res.json({
+                results: testCases.map((tc: any) => ({
+                    input: tc.input,
+                    expected: tc.expectedOutput,
+                    error: errText || 'Execution error — check your syntax',
+                    status: 'Error',
+                })),
+                summary: { passed: 0, total: testCases.length },
+                stderr: errText,
+            }); return;
+
+        } catch (execErr: any) {
+            await fs.unlink(tempFilePath).catch(() => { });
+
+            const isTimeout = execErr.killed || execErr.signal === 'SIGTERM';
+            const errMsg = isTimeout
+                ? 'Time Limit Exceeded (5s)'
+                : ((execErr.stderr || execErr.stdout || execErr.message || 'Runtime Error')
+                    .replace(/\r\n/g, '\n')
+                    .split('\n')
+                    .filter((l: string) => l.trim())
+                    .slice(0, 4)
+                    .join('\n'));
+
+            console.error('[/run] execAsync threw:', execErr.message?.slice(0, 200));
+            res.json({
+                results: testCases.map((tc: any) => ({
+                    input: tc.input,
+                    expected: tc.expectedOutput,
+                    error: errMsg,
+                    status: isTimeout ? 'Time Limit Exceeded' : 'Error',
+                })),
+                summary: { passed: 0, total: testCases.length },
+            }); return;
         }
 
     } catch (err: any) {
-        console.error("RUN ERROR:", err);
-        return res.status(500).json({ 
-            error: "Execution failed", 
-            details: err.message || "Internal server error" 
-        });
+        console.error('[/run] Unexpected error:', err);
+        res.status(500).json({
+            error: 'Execution failed',
+            details: err.message || 'Internal server error',
+        }); return;
     }
 });
 
@@ -680,7 +696,7 @@ Provide a comprehensive evaluation. Return ONLY valid JSON (no markdown, no code
     "optimalSpace": "<best possible space complexity>"
   },
   "idealAnswer": "<clean, production-quality solution in the same language, well-commented>",
-  "resumeBullet": "<one line resume-ready bullet point summarizing what they demonstrated, e.g. Solved X using Y achieving Z complexity>"
+  "resumeBullet": "<one line resume-ready bullet point summarizing what they demonstrated>"
 }`;
 
         const apiRes = await axios.post(AI_BASE_URL, {
@@ -709,19 +725,18 @@ Provide a comprehensive evaluation. Return ONLY valid JSON (no markdown, no code
                 optimization: feedback.optimization || 0,
                 clarity: feedback.clarity || 0,
                 overallScore: feedback.overallScore || 0,
-                testCasesPassed: feedback.approachQuality
+                testCasesPassed: feedback.approachQuality,
             },
             feedback: {
                 strengths: feedback.strengths || [],
                 weaknesses: feedback.weaknesses || [],
                 improvements: feedback.improvements || [],
                 complexityAnalysis: feedback.complexityAnalysis || { time: 'N/A', space: 'N/A' },
-                idealAnswer: feedback.idealAnswer || ''
+                idealAnswer: feedback.idealAnswer || '',
             },
-            createdAt: new Date()
+            createdAt: new Date(),
         };
 
-        // Enrich result with full feedback before returning
         const fullResult = {
             ...sessionData,
             feedback: {
@@ -732,12 +747,12 @@ Provide a comprehensive evaluation. Return ONLY valid JSON (no markdown, no code
                 approachQuality: feedback.approachQuality || 'SUBOPTIMAL',
                 communication: feedback.communication || 70,
                 stepByStepFeedback: feedback.stepByStepFeedback || [],
-                resumeBullet: feedback.resumeBullet || ''
+                resumeBullet: feedback.resumeBullet || '',
             },
             score: {
                 ...sessionData.score,
-                communication: feedback.communication || 70
-            }
+                communication: feedback.communication || 70,
+            },
         };
 
         if (mongoose.connection.readyState === 1) {

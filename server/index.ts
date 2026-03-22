@@ -24,7 +24,7 @@ async function start() {
     console.error('   Admin     : ⚠️ High-level analytics will use fallback/mock data\n');
   }
 
-  const server = app.listen(PORT, () => {
+  const server = app.listen(PORT, '0.0.0.0', () => {
     console.log(`✅ Server listening on http://localhost:${PORT}`);
     console.log(`   Health check: http://localhost:${PORT}/api/health\n`);
   });
