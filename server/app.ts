@@ -15,7 +15,11 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
+
+// ── API Router Setup ──────────────────────────────────────────────
 const api = express.Router();
+// Mount api router at /api prefix immediately to keep logic grouped
+app.use('/api', api);
 
 app.use(cors({
     origin: ['https://progresss-tracker.vercel.app', 'http://localhost:5000'],
@@ -1049,8 +1053,8 @@ api.use('/interview', interviewRoutes);
 import mentorRoutes from './mentorRoutes.js';
 api.use('/mentor', mentorRoutes);
 
-app.use('/api', api);
-app.use('/', api);
+// Export the router for use elsewhere
+export { api };
 
 // Global error handler (required for Express 5 async errors)
 app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
@@ -1066,5 +1070,20 @@ if (process.env.NODE_ENV === 'production' && process.env.VERCEL !== '1') {
             res.sendFile(path.resolve(distPath, 'index.html'));
     });
 }
+
+// ── Debug: Log All Routes ──────────────────────────────────────────
+console.log('--- REGISTERED ROUTES ---');
+function printRoutes(stack: any[], prefix = '') {
+    stack.forEach(r => {
+        if (r.route) {
+            const methods = Object.keys(r.route.methods).join(',').toUpperCase();
+            console.log(`${methods} ${prefix}${r.route.path}`);
+        } else if (r.name === 'router' && r.handle.stack) {
+            printRoutes(r.handle.stack, prefix + (r.regexp.source.replace('\\/', '/').replace('^', '').replace('\\/?(?=\\/|$)', '') || ''));
+        }
+    });
+}
+printRoutes(app._router.stack);
+console.log('-------------------------');
 
 export default app;
