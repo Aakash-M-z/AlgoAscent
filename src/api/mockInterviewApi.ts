@@ -66,21 +66,11 @@ export const mockInterviewApi = {
     runCode: async (payload: {
         code: string;
         language: string;
-        questionText?: string;
-        functionName: string;
-        testCases?: any[];
+        input: string;
     }) => {
-        const normalized = normalizeLanguage(payload.language);
-        const body = {
-            code: payload.code,
-            language: normalized,
-            functionName: payload.functionName,
-            testCases: payload.testCases ?? [],
-        };
-        console.log('[mockInterviewApi.runCode] payload:', JSON.stringify(body, null, 2));
-        const res = await api.post('/interview/run', body, {
+        const response = await axios.post("https://code-execution-backend-qq01.onrender.com/run-code", payload, {
             headers: { 'Content-Type': 'application/json' },
         });
-        return res.data;
+        return response.data;
     },
 };

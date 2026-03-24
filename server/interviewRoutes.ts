@@ -1,4 +1,4 @@
-﻿import { Router } from 'express';
+import { Router } from 'express';
 import mongoose from 'mongoose';
 import { InterviewSessionModel } from './models.js';
 import { extractBearer, verifyToken } from './jwt.js';
@@ -343,57 +343,107 @@ Respond in 3 paragraphs max. Be direct and professional. End with:
     }
 });
 
+// -- Local execution engine (child_process) --
+// Runs on Render (persistent server) where python3, node, g++, javac are available.
 import { exec } from 'child_process';
-import util from 'util';
-import fs from 'fs/promises';
-import path from 'path';
-import os from 'os';
+import util    from 'util';
+import fs      from 'fs/promises';
+import path    from 'path';
+import os      from 'os';
 
 const execAsync = util.promisify(exec);
 
-// â”€â”€ POST /api/interview/run â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// OS-aware Python interpreter
+const PY = process.platform === 'win32' ? 'python' : 'python3';
+
+async function localRun(
+    sourceCode: string,
+    lang: string,
+): Promise<{ stdout: string; stderr: string; timedOut: boolean }> {
+    const ext     = lang === 'javascript' ? 'js' : lang === 'python3' ? 'py' : lang === 'cpp' ? 'cpp' : 'java';
+    const tmpBase = path.join(os.tmpdir(), `run_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`);
+    const srcFile = `${tmpBase}.${ext}`;
+
+    await fs.writeFile(srcFile, sourceCode, 'utf8');
+
+    let command: string;
+    let cleanup: string[] = [srcFile];
+
+    if (lang === 'javascript') {
+        command = `node "${srcFile}"`;
+    } else if (lang === 'python3') {
+        command = `${PY} "${srcFile}"`;
+    } else if (lang === 'cpp') {
+        const outFile = `${tmpBase}.out`;
+        cleanup.push(outFile);
+        command = `g++ -o "${outFile}" "${srcFile}" && "${outFile}"`;
+    } else if (lang === 'java') {
+        // Java requires class name = file name; we use Main
+        const javaDir  = tmpBase + '_java';
+        const javaFile = path.join(javaDir, 'Main.java');
+        await fs.mkdir(javaDir, { recursive: true });
+        await fs.writeFile(javaFile, sourceCode, 'utf8');
+        cleanup = [javaDir];
+        command = `javac "${javaFile}" -d "${javaDir}" && java -cp "${javaDir}" Main`;
+    } else {
+        throw new Error(`Unsupported language: ${lang}`);
+    }
+
+    try {
+        const env = { ...process.env, PYTHONIOENCODING: 'utf-8', PYTHONUTF8: '1' };
+        const { stdout, stderr } = await execAsync(command, { timeout: 8000, env });
+        return {
+            stdout: stdout.replace(/\r\n/g, '\n'),
+            stderr: stderr.replace(/\r\n/g, '\n'),
+            timedOut: false,
+        };
+    } catch (e: any) {
+        const timedOut = e.killed || e.signal === 'SIGTERM' || String(e.message).includes('timeout');
+        return {
+            stdout: (e.stdout || '').replace(/\r\n/g, '\n'),
+            stderr: (e.stderr || e.message || 'Runtime Error').replace(/\r\n/g, '\n'),
+            timedOut,
+        };
+    } finally {
+        // Best-effort cleanup
+        for (const f of cleanup) {
+            fs.rm(f, { recursive: true, force: true }).catch(() => {});
+        }
+    }
+}
+
+
+// -- POST /api/interview/run --
 router.post('/run', async (req, res) => {
     try {
-        // Destructure â€” extra fields like questionText are silently ignored
         let { code, language, testCases, functionName } = req.body;
 
         console.log('[/run] body:', {
-            language,
-            functionName,
+            language, functionName,
             codeLength: code?.length,
             testCasesCount: Array.isArray(testCases) ? testCases.length : testCases,
         });
 
-        // â”€â”€ Validation â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        // Validation
         if (!code || typeof code !== 'string' || !code.trim()) {
             res.status(400).json({ error: 'Validation Error', details: 'code is required and must be a non-empty string' }); return;
         }
-
         if (testCases !== undefined && !Array.isArray(testCases)) {
             res.status(400).json({ error: 'Validation Error', details: 'testCases must be an array' }); return;
         }
-
         testCases = Array.isArray(testCases) ? testCases : [];
-
         if (testCases.length > 0 && !functionName) {
             res.status(400).json({ error: 'Validation Error', details: 'functionName is required when testCases are provided' }); return;
         }
 
-        // â”€â”€ Language normalisation â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        // Language normalisation
         const langMap: Record<string, string> = {
-            python: 'python3',
-            python3: 'python3',
-            '71': 'python3',
-            javascript: 'javascript',
-            js: 'javascript',
-            '63': 'javascript',
-            cpp: 'cpp',
-            'c++': 'cpp',
-            java: 'java',
+            python: 'python3', python3: 'python3', '71': 'python3',
+            javascript: 'javascript', js: 'javascript', '63': 'javascript',
+            cpp: 'cpp', 'c++': 'cpp', '54': 'cpp',
+            java: 'java', '62': 'java',
         };
-
         const normalizedLang = langMap[(language ?? '').toLowerCase()];
-
         if (!normalizedLang) {
             res.status(400).json({
                 error: 'Validation Error',
@@ -401,53 +451,28 @@ router.post('/run', async (req, res) => {
             }); return;
         }
 
-        // Short-circuit: no test cases
         if (testCases.length === 0) {
             res.json({ results: [], summary: { passed: 0, total: 0 } }); return;
         }
 
-        const isJs = normalizedLang === 'javascript';
-        const isPy = normalizedLang === 'python3';
-
-        // Java / C++ â€” graceful stub (no 400, no crash)
-        if (!isJs && !isPy) {
-            res.json({
-                results: testCases.map((tc: any) => ({
-                    input: tc.input,
-                    expected: tc.expectedOutput,
-                    error: `${normalizedLang} execution is not available in this environment. Switch to JavaScript or Python.`,
-                    status: 'Error',
-                })),
-                summary: { passed: 0, total: testCases.length },
-            }); return;
-        }
-
-        // â”€â”€ Build runner script â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-        const ext = isJs ? 'js' : 'py';
-        const tempFilePath = path.join(
-            os.tmpdir(),
-            `run_${Date.now()}_${Math.random().toString(36).slice(2, 8)}.${ext}`
-        );
-
-        // Base64-encode test cases to avoid any quote/escape issues in the injected script
-        const tcB64 = Buffer.from(JSON.stringify(testCases)).toString('base64');
+        const isJs   = normalizedLang === 'javascript';
+        const isPy   = normalizedLang === 'python3';
         const fnName = String(functionName);
+        const tcB64  = Buffer.from(JSON.stringify(testCases)).toString('base64');
 
+        // Build runner source — JS and Python get a full test harness injected.
+        // Java and C++ are sent as-is; raw stdout is shown.
         let runnerCode: string;
 
         if (isJs) {
-            // JS runner: base64-decode test cases, call function, emit sentinel JSON
             runnerCode = [
-                code,
-                '',
+                code, '',
                 `const __tc = JSON.parse(Buffer.from('${tcB64}', 'base64').toString('utf8'));`,
-                'const __results = [];',
-                'let __passed = 0;',
+                'const __results = []; let __passed = 0;',
                 '__tc.forEach((tc) => {',
                 '  try {',
                 '    const inp = Array.isArray(tc.input) ? tc.input : [tc.input];',
                 '    const exp = tc.expectedOutput;',
-                '    // Always spread — single arg [2] becomes fn(2), multi [arr,k] becomes fn(arr,k)',
                 `    const out = ${fnName}(...inp);`,
                 '    const ok = JSON.stringify(out) === JSON.stringify(exp);',
                 '    if (ok) __passed++;',
@@ -458,136 +483,112 @@ router.post('/run', async (req, res) => {
                 '});',
                 "process.stdout.write('\\n###RESULT###' + JSON.stringify({ results: __results, summary: { passed: __passed, total: __tc.length } }) + '###END###\\n');",
             ].join('\n');
-        } else {
-            // Python runner: base64-decode test cases, always unpack with *, emit sentinel JSON
+
+        } else if (isPy) {
             runnerCode = [
                 'import json, sys, base64',
-                'import io',
-                'sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")',
-                '',
-                code,
-                '',
+                code, '',
                 'def __run_tests():',
-                `    raw = base64.b64decode('${tcB64}').decode('utf-8')`,
-                '    __tc = json.loads(raw)',
-                '    __results = []',
-                '    __passed = 0',
+                `    __tc = json.loads(base64.b64decode('${tcB64}').decode('utf-8'))`,
+                '    __results = []; __passed = 0',
                 '    for tc in __tc:',
                 '        try:',
                 '            inp = tc["input"] if isinstance(tc["input"], list) else [tc["input"]]',
                 '            exp = tc["expectedOutput"]',
-                '            # Always unpack — [2] -> fn(2), [[1,2],9] -> fn([1,2], 9)',
                 `            out = ${fnName}(*inp)`,
                 '            ok = out == exp',
-                '            if ok:',
-                '                __passed += 1',
-                '            __results.append({',
-                '                "input": inp, "expected": exp, "output": out,',
-                '                "status": "Passed" if ok else "Wrong Answer"',
-                '            })',
+                '            if ok: __passed += 1',
+                '            __results.append({"input": inp, "expected": exp, "output": out, "status": "Passed" if ok else "Wrong Answer"})',
                 '        except Exception as e:',
-                '            __results.append({',
-                '                "input": tc.get("input"), "expected": tc.get("expectedOutput"),',
-                '                "error": str(e), "status": "Error"',
-                '            })',
-                '    payload = json.dumps({"results": __results, "summary": {"passed": __passed, "total": len(__tc)}})',
-                '    sys.stdout.write("\\n###RESULT###" + payload + "###END###\\n")',
+                '            __results.append({"input": tc.get("input"), "expected": tc.get("expectedOutput"), "error": str(e), "status": "Error"})',
+                '    sys.stdout.write("\\n###RESULT###" + json.dumps({"results": __results, "summary": {"passed": __passed, "total": len(__tc)}}) + "###END###\\n")',
                 '    sys.stdout.flush()',
-                '',
-                'if __name__ == "__main__":',
-                '    __run_tests()',
+                '__run_tests()',
             ].join('\n');
+
+        } else {
+            // Java / C++ — executed as-is, raw stdout shown
+            runnerCode = code;
         }
 
-        await fs.writeFile(tempFilePath, runnerCode, 'utf8');
-
-        // Detect Python interpreter: Windows uses "python", Unix uses "python3"
-        const pyInterp = process.platform === "win32" ? "python" : "python3";
-        const command = isJs ? `node "${tempFilePath}"` : `${pyInterp} "${tempFilePath}"`;
-
+        // Execute via local child_process (Render has python3, node, g++, javac)
+        let execResult: { stdout: string; stderr: string; timedOut: boolean };
         try {
-            const execEnv = { ...process.env, PYTHONIOENCODING: "utf-8", PYTHONUTF8: "1" };
-            const { stdout, stderr } = await execAsync(command, { timeout: 5000, env: execEnv });
-            await fs.unlink(tempFilePath).catch(() => { });
-
-            // Normalize line endings (Windows \r\n → \n) before parsing
-            const out = stdout.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
-
-            // Extract structured result block — immune to user print() noise
-            const match = out.match(/###RESULT###([\s\S]+?)###END###/);
-            if (match) {
-                let parsed: any;
-                try {
-                    parsed = JSON.parse(match[1].trim());
-                } catch (parseErr: any) {
-                    console.error('[/run] JSON parse failed:', parseErr.message, '| raw:', match[1].slice(0, 200));
-                    res.json({
-                        results: testCases.map((tc: any) => ({
-                            input: tc.input,
-                            expected: tc.expectedOutput,
-                            error: 'Failed to parse execution output',
-                            status: 'Error',
-                        })),
-                        summary: { passed: 0, total: testCases.length },
-                        stderr: match[1].slice(0, 500),
-                    }); return;
-                }
-                // Attach any user stdout (everything outside the sentinel block)
-                const userStdout = out.replace(/###RESULT###[\s\S]+?###END###/, '').trim();
-                res.json({ ...parsed, stdout: userStdout }); return;
-            }
-
-            // No sentinel found — syntax/runtime error before our wrapper ran
-            const errText = (stderr || stdout || 'Unknown execution error')
-                .replace(/\r\n/g, '\n')
-                .split('\n')
-                .filter((l: string) => l.trim())
-                .slice(0, 6)
-                .join('\n');
-
-            console.error('[/run] No sentinel in output. stderr:', stderr?.slice(0, 300));
+            execResult = await localRun(runnerCode, normalizedLang);
+        } catch (execErr: any) {
+            console.error('[/run] localRun threw:', execErr.message);
             res.json({
                 results: testCases.map((tc: any) => ({
-                    input: tc.input,
-                    expected: tc.expectedOutput,
-                    error: errText || 'Execution error — check your syntax',
+                    input: tc.input, expected: tc.expectedOutput,
+                    error: 'Execution service error. Please try again.',
                     status: 'Error',
                 })),
                 summary: { passed: 0, total: testCases.length },
-                stderr: errText,
-            }); return;
-
-        } catch (execErr: any) {
-            await fs.unlink(tempFilePath).catch(() => { });
-
-            const isTimeout = execErr.killed || execErr.signal === 'SIGTERM';
-            const errMsg = isTimeout
-                ? 'Time Limit Exceeded (5s)'
-                : ((execErr.stderr || execErr.stdout || execErr.message || 'Runtime Error')
-                    .replace(/\r\n/g, '\n')
-                    .split('\n')
-                    .filter((l: string) => l.trim())
-                    .slice(0, 4)
-                    .join('\n'));
-
-            console.error('[/run] execAsync threw:', execErr.message?.slice(0, 200));
-            res.json({
-                results: testCases.map((tc: any) => ({
-                    input: tc.input,
-                    expected: tc.expectedOutput,
-                    error: errMsg,
-                    status: isTimeout ? 'Time Limit Exceeded' : 'Error',
-                })),
-                summary: { passed: 0, total: testCases.length },
             }); return;
         }
 
+        const { stdout, stderr, timedOut } = execResult;
+
+        // Timeout
+        if (timedOut) {
+            res.json({
+                results: testCases.map((tc: any) => ({
+                    input: tc.input, expected: tc.expectedOutput,
+                    error: 'Time Limit Exceeded (8s)', status: 'Time Limit Exceeded',
+                })),
+                summary: { passed: 0, total: testCases.length },
+                stderr: 'Process killed after 8 seconds',
+            }); return;
+        }
+
+        // Runtime / compile error — stderr present and no sentinel in stdout
+        if (stderr && !stdout.includes('###RESULT###')) {
+            const errDetail = stderr.split('\n').filter(Boolean).slice(0, 8).join('\n');
+            console.error('[/run] stderr:', errDetail.slice(0, 200));
+            res.json({
+                results: testCases.map((tc: any) => ({
+                    input: tc.input, expected: tc.expectedOutput,
+                    error: errDetail || 'Execution error — check your syntax',
+                    status: 'Error',
+                })),
+                summary: { passed: 0, total: testCases.length },
+                stderr: errDetail,
+            }); return;
+        }
+
+        // Parse sentinel block (JS + Python runners emit this)
+        const match = stdout.match(/###RESULT###([\s\S]+?)###END###/);
+        if (match) {
+            let parsed: any;
+            try {
+                parsed = JSON.parse(match[1].trim());
+            } catch {
+                res.json({
+                    results: testCases.map((tc: any) => ({
+                        input: tc.input, expected: tc.expectedOutput,
+                        error: 'Failed to parse execution output', status: 'Error',
+                    })),
+                    summary: { passed: 0, total: testCases.length },
+                }); return;
+            }
+            const userStdout = stdout.replace(/###RESULT###[\s\S]+?###END###/, '').trim();
+            res.json({ ...parsed, stdout: userStdout }); return;
+        }
+
+        // No sentinel — Java/C++ raw output or syntax error before runner ran
+        const errText = (stderr || stdout || 'Unknown execution error').split('\n').filter(Boolean).slice(0, 6).join('\n');
+        res.json({
+            results: testCases.map((tc: any) => ({
+                input: tc.input, expected: tc.expectedOutput,
+                error: errText || 'Execution error — check your syntax', status: 'Error',
+            })),
+            summary: { passed: 0, total: testCases.length },
+            stderr: errText,
+            stdout: stdout.trim() || undefined,
+        }); return;
     } catch (err: any) {
         console.error('[/run] Unexpected error:', err);
-        res.status(500).json({
-            error: 'Execution failed',
-            details: err.message || 'Internal server error',
-        }); return;
+        res.status(500).json({ error: 'Execution failed', details: err.message || 'Internal server error' }); return;
     }
 });
 
