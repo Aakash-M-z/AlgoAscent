@@ -18,7 +18,7 @@ const app = express();
 const api = express.Router();
 
 app.use(cors({
-    origin: process.env.FRONTEND_URL || '*',
+    origin: ['https://progresss-tracker.vercel.app', 'http://localhost:5000'],
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'x-admin-id', 'x-user-id'],
     credentials: true,
@@ -32,8 +32,13 @@ app.use((_req, res, next) => {
     next();
 });
 
-// Health check — returns storage type and env status for easy debugging
+// Health check — standardized for frontend monitoring
 api.get('/health', async (_req, res) => {
+    res.status(200).json({ status: 'OK' });
+});
+
+// Detailed health — for admin debugging
+api.get('/health/details', async (_req, res) => {
     const { mongoConnected } = await import('./mongo-storage.js');
     const apiKey = process.env.OPENROUTER_API_KEY;
     res.status(200).json({
@@ -41,14 +46,11 @@ api.get('/health', async (_req, res) => {
         timestamp: new Date().toISOString(),
         storage: mongoConnected ? 'mongodb' : 'file',
         env: {
-            openrouter: apiKey
-                ? `present (${apiKey.slice(0, 12)}...)`
-                : 'MISSING — set OPENROUTER_API_KEY in Vercel dashboard',
-            frontendUrl: process.env.FRONTEND_URL || 'not set',
+            openrouter: apiKey ? `present` : 'MISSING',
+            frontendUrl: 'https://progresss-tracker.vercel.app',
             mongodb: !!process.env.MONGODB_URI,
             port: process.env.PORT || 3001,
             nodeEnv: process.env.NODE_ENV || 'development',
-            runtime: 'express/vercel',
         },
     });
 });
