@@ -32,69 +32,63 @@ const CodeEnvironment: React.FC<CodeEnvironmentProps> = ({
     question,
     functionName
 }) => {
-    const [selectedLang, setSelectedLang] = useState(LANGUAGES[0]);
     const [code, setCode] = useState('');
+    const [language, setLanguage] = useState(LANGUAGES[0].monaco);
+    const [input, setInput] = useState('');
+    const [output, setOutput] = useState<any>(null);
     const [isRunning, setIsRunning] = useState(false);
     const [isThinking, setIsThinking] = useState(false);
-    const [output, setOutput] = useState<any>(null);
-    const [activeTab, setActiveTab] = useState<'console' | 'testcases' | 'ai'>('testcases');
+    const [activeTab, setActiveTab] = useState<'console' | 'testcases' | 'ai' | 'input'>('testcases');
     const [testResults, setTestResults] = useState<any[]>([]);
     const [aiFeedback, setAiFeedback] = useState<string>('');
 
     // Set initial code based on language
     useEffect(() => {
-        const langKey = selectedLang.monaco;
-        const initial = initialCodes[langKey] || `// Write your ${selectedLang.name} code here`;
+        const initial = initialCodes[language] || `// Write your code here`;
         setCode(initial);
         onCodeChange(initial);
-    }, [selectedLang, initialCodes]);
+    }, [language, initialCodes]);
 
     const handleLanguageChange = (langName: string) => {
         const lang = LANGUAGES.find(l => l.name === langName);
         if (lang) {
-            setSelectedLang(lang);
+            setLanguage(lang.monaco);
         }
     };
 
     const runCode = async () => {
         setIsRunning(true);
-        setActiveTab('testcases');
+        setActiveTab('console'); // Switch to console to show output immediately
         setOutput(null);
-        setTestResults([]);
         
         try {
-            const res = await mockInterviewApi.runCode({ 
+            // Using the centralized API function which points to the Render backend
+            const data = await mockInterviewApi.runCode({ 
                 code, 
-                language: selectedLang.monaco, 
-                questionText: question,
-                functionName,
-                testCases
+                language, 
+                input 
             });
             
-            setOutput(res);
+            // Set output for display in the console tab
+            setOutput(data); 
 
-            if (res.results) {
-                const results = res.results.map((r: any, i: number) => {
-                    const originalTc = testCases[i];
-                    return {
-                        ...originalTc,
-                        actualOutput: r.output !== undefined ? JSON.stringify(r.output) : r.error || 'Execution Error',
-                        passed: r.status === 'Passed',
-                        status: r.status
-                    };
-                });
-                setTestResults(results);
-            } else {
-                setTestResults(testCases.map(tc => ({
-                    ...tc,
-                    actualOutput: 'Execution Error',
-                    passed: false,
-                    status: 'Error'
-                })));
+            // If we have test cases, we could potentially run them all
+            // But for a "LeetCode-like" live execution, usually we run against custom input first.
+            // If the user is in the 'testcases' tab, maybe they expect a different behavior.
+            
+            if (testCases.length > 0 && activeTab === 'testcases') {
+                // If the backend doesn't support batch test cases, we just show the output for the provided input
+                // and mark it as a generic run result.
+                setTestResults([{
+                    input: [input],
+                    expectedOutput: 'Manual Run',
+                    actualOutput: data.stdout || data.stderr || data.error,
+                    passed: !data.stderr && !data.error,
+                    status: (data.stderr || data.error) ? 'Failed' : 'Success'
+                }]);
             }
-        } catch (error: any) {
-            const errorMsg = error.response?.data?.details || error.response?.data?.error || 'Internal execution error. Please try again.';
-            setOutput({ stderr: errorMsg });
+        } catch (error) {
+            setOutput({ stderr: "⚠️ Execution failed. Check your connection to the code execution server." });
         } finally {
             setIsRunning(false);
         }
@@ -105,7 +99,8 @@ const CodeEnvironment: React.FC<CodeEnvironmentProps> = ({
         setActiveTab('ai');
         setAiFeedback('🤖 AI is studying your code...');
         try {
-            const data = await mockInterviewApi.getCodeFeedback({ question, code, language: selectedLang.name });
+            const langName = LANGUAGES.find(l => l.monaco === language)?.name || 'JavaScript';
+            const data = await mockInterviewApi.getCodeFeedback({ question, code, language: langName });
             setAiFeedback(data.feedback);
         } catch (error) {
             setAiFeedback('Failed to get feedback. Check connection.');
@@ -121,7 +116,7 @@ const CodeEnvironment: React.FC<CodeEnvironmentProps> = ({
                 <div className="flex items-center gap-3">
                     <div className="relative group">
                         <select 
-                            value={selectedLang.name}
+                            value={LANGUAGES.find(l => l.monaco === language)?.name || 'JavaScript'}
                             onChange={(e) => handleLanguageChange(e.target.value)}
                             className="appearance-none bg-[#1a1a1a] text-gray-300 text-xs font-bold px-4 h-10 pr-10 rounded-lg border border-white/10 focus:outline-none focus:border-[#D4AF37] transition-all cursor-pointer hover:border-white/20"
                         >
@@ -160,7 +155,7 @@ const CodeEnvironment: React.FC<CodeEnvironmentProps> = ({
                     <Editor
                         height="100%"
                         width="100%"
-                        language={selectedLang.monaco}
+                        language={language}
                         theme="vs-dark"
                         value={code}
                         onChange={(val) => {
@@ -198,6 +193,12 @@ const CodeEnvironment: React.FC<CodeEnvironmentProps> = ({
                             className={`py-3 text-[10px] font-bold uppercase tracking-widest transition-all border-b-2 ${activeTab === 'testcases' ? 'text-white border-[#D4AF37]' : 'text-gray-600 border-transparent hover:text-gray-400'}`}
                         >
                             Test Results
+                        </button>
+                        <button 
+                            onClick={() => setActiveTab('input')}
+                            className={`py-3 text-[10px] font-bold uppercase tracking-widest transition-all border-b-2 ${activeTab === 'input' ? 'text-white border-[#D4AF37]' : 'text-gray-600 border-transparent hover:text-gray-400'}`}
+                        >
+                            Custom Input
                         </button>
                         <button 
                             onClick={() => setActiveTab('console')}
@@ -287,6 +288,17 @@ const CodeEnvironment: React.FC<CodeEnvironmentProps> = ({
                                 ) : (
                                     <p className="text-gray-600 text-xs italic">No output yet. Click "Run Code" to execute.</p>
                                 )}
+                            </div>
+                        ) : activeTab === 'input' ? (
+                            <div className="space-y-4">
+                                <p className="text-[10px] text-gray-500 font-bold uppercase mb-1">Standard Input (stdin)</p>
+                                <textarea
+                                    value={input}
+                                    onChange={(e) => setInput(e.target.value)}
+                                    placeholder="Enter custom input for your code..."
+                                    className="w-full h-32 bg-black/40 border border-white/5 rounded-lg p-3 text-sm text-gray-300 font-mono focus:outline-none focus:border-[#D4AF37]/50 transition-all custom-scrollbar resize-none"
+                                />
+                                <p className="text-[10px] text-gray-400 italic">This input will be sent to your program when you click "Run Code".</p>
                             </div>
                         ) : (
                             <div className="bg-[#D4AF37]/5 border-l-2 border-[#D4AF37] p-4 rounded-r-xl">
