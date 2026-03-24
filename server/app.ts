@@ -16,13 +16,14 @@ const __dirname = path.dirname(__filename);
 
 const app = express();
 
-// ── API Router Setup ──────────────────────────────────────────────
-const api = express.Router();
-// Mount api router at /api prefix immediately to keep logic grouped
-app.use('/api', api);
-
+// ── Global middleware MUST come before route mounting ─────────────
 app.use(cors({
-    origin: ['https://progresss-tracker.vercel.app', 'http://localhost:5000'],
+    origin: [
+        'https://progresss-tracker.vercel.app',
+        'http://localhost:5173',  // Vite dev server
+        'http://localhost:5000',
+        'http://localhost:3000',
+    ],
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'x-admin-id', 'x-user-id'],
     credentials: true,
@@ -35,6 +36,10 @@ app.use((_req, res, next) => {
     res.setHeader('Cross-Origin-Embedder-Policy', 'unsafe-none');
     next();
 });
+
+// ── API Router Setup ──────────────────────────────────────────────
+const api = express.Router();
+app.use('/api', api);
 
 // Health check — standardized for frontend monitoring
 api.get('/health', async (_req, res) => {
@@ -100,10 +105,10 @@ api.post('/register', async (req, res) => {
         const user = await storage.createUser(userData);
         const { password: _, ...safeUser } = user;
         const jwtToken = signToken({ id: user.id, email: user.email, role: user.role, plan: (user as any).plan ?? 'free' });
-        
+
         // Background email — don't await to avoid registration lag
-        sendWelcomeEmail(user.email, user.username).catch(() => {});
-        
+        sendWelcomeEmail(user.email, user.username).catch(() => { });
+
         res.status(201).json({ user: safeUser, token: jwtToken });
     } catch (error) {
         console.error('Register error:', error);
@@ -117,7 +122,8 @@ api.post('/auth/google', async (req, res) => {
         const { token: googleAccessToken } = req.body;
         if (!googleAccessToken) { res.status(400).json({ error: 'Token is required' }); return; }
         const googleUserRes = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
-            headers: { Authorization: `Bearer ${googleAccessToken}` }
+            headers: { Authorization: `Bearer ${googleAccessToken}` },
+            signal: AbortSignal.timeout(10000), // 10s — prevents ECONNRESET on slow Google responses
         });
         if (!googleUserRes.ok) {
             res.status(401).json({ error: 'Failed to authenticate with Google' }); return;
@@ -146,12 +152,12 @@ api.post('/auth/google', async (req, res) => {
         }
         const { password: _, ...safeUser } = user;
         const jwtToken = signToken({ id: user.id, email: user.email, role: user.role, plan: (user as any).plan ?? 'free' });
-        
+
         // Background email for new users — don't await
         if (user.createdAt && (Date.now() - new Date(user.createdAt).getTime()) < 10000) {
-            sendWelcomeEmail(user.email, user.username).catch(() => {});
+            sendWelcomeEmail(user.email, user.username).catch(() => { });
         }
-        
+
         res.json({ user: safeUser, token: jwtToken });
     } catch (error) {
         console.error('Google auth error:', error);
@@ -199,7 +205,7 @@ api.get('/users/:id/activities', async (req, res) => {
 
         // 5. Log DB query results
         console.log(`[DB] Successfully fetched ${activities?.length || 0} activities for user: ${id}`);
-        
+
         // Return 200 OK with empty array if no activities (fixes frontend 404 error)
         return res.json(activities || []);
     } catch (error: any) {
@@ -838,7 +844,7 @@ api.post('/ai/explain-topic', checkPlanAccess, async (req, res) => {
 api.post('/ai/chat', async (req, res) => {
     try {
         let authUser: any = null;
-        
+
         // Optional Auth Check - allow unauthenticated fallback
         const token = extractBearer(req.headers.authorization);
         if (token) {
@@ -864,7 +870,7 @@ api.post('/ai/chat', async (req, res) => {
         }
 
         const { message, history = [], userStats } = req.body;
-        
+
         if (!message) { res.status(400).json({ error: 'Message is required' }); return; }
 
         const apiKey = process.env.OPENROUTER_API_KEY;
@@ -873,8 +879,8 @@ api.post('/ai/chat', async (req, res) => {
         }
 
         const hasUserData = userStats && (userStats.solved > 0 || userStats.streak > 0 || userStats.topCat);
-        
-        const systemPrompt = hasUserData 
+
+        const systemPrompt = hasUserData
             ? `You are an expert AI mentor and interviewer for Software Engineering and DSA.
 You have access to the user's progress data:
 - Problems solved: ${userStats.solved || 0}
@@ -1072,18 +1078,33 @@ if (process.env.NODE_ENV === 'production' && process.env.VERCEL !== '1') {
 }
 
 // ── Debug: Log All Routes ──────────────────────────────────────────
-console.log('--- REGISTERED ROUTES ---');
 function printRoutes(stack: any[], prefix = '') {
     stack.forEach(r => {
         if (r.route) {
             const methods = Object.keys(r.route.methods).join(',').toUpperCase();
             console.log(`${methods} ${prefix}${r.route.path}`);
-        } else if (r.name === 'router' && r.handle.stack) {
-            printRoutes(r.handle.stack, prefix + (r.regexp.source.replace('\\/', '/').replace('^', '').replace('\\/?(?=\\/|$)', '') || ''));
+        } else if (r.name === 'router' && r.handle?.stack) {
+            const mount = r.regexp?.source
+                ?.replace(/\\\//g, '/')
+                ?.replace(/^\^/, '')
+                ?.replace(/\\\/?(?=\\\/|\$)/, '')
+                ?.replace(/\?.*$/, '')
+                ?.replace(/\$$/, '') ?? '';
+            printRoutes(r.handle.stack, prefix + mount);
         }
     });
 }
-printRoutes(app._router.stack);
-console.log('-------------------------');
+
+if (process.env.NODE_ENV !== 'production') {
+    // Defer to next tick so all route registrations (including async imports) complete first
+    setImmediate(() => {
+        const router = (app as any)._router;
+        if (router?.stack) {
+            console.log('--- REGISTERED ROUTES ---');
+            printRoutes(router.stack);
+            console.log('-------------------------');
+        }
+    });
+}
 
 export default app;

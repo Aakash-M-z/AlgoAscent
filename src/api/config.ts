@@ -1,14 +1,11 @@
 /**
- * Central configuration for API calls.
- * This determines whether the frontend calls a local or remote backend.
+ * API_BASE is intentionally empty — all /api/* routes are same-origin (Vercel).
+ * CODE_EXEC_BASE points to the separate Render code execution service.
  */
+export const API_BASE = '';
 
-// Use VITE_API_BASE_URL from environment variables, or fallback to an empty string.
-// An empty string defaults calls to the current domain (e.g. for local dev or Vercel proxying).
-// Ensure this is set to your Render backend URL in the Vercel dashboard.
-export const API_BASE = import.meta.env.VITE_API_BASE_URL || '';
+export const CODE_EXEC_BASE: string = import.meta.env.VITE_CODE_EXECUTION_URL ?? '';
 
-// Optional configuration for separate code execution backend if needed.
-export const CODE_EXECUTION_BASE = import.meta.env.VITE_CODE_EXECUTION_URL || API_BASE;
-
-console.log(`[API] Base URL configured as: ${API_BASE}`);
+if (!CODE_EXEC_BASE) {
+    console.warn('[config] VITE_CODE_EXECUTION_URL is not set — code execution will fail');
+}
