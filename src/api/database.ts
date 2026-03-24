@@ -1,7 +1,7 @@
 import { Activity, InsertActivity, User, InsertUser, AdminLog, Task, InsertTask } from '../../shared/schema';
 import { SessionManager } from '../utils/sessionManager';
 
-const API_BASE = import.meta.env.VITE_API_URL || '/api';
+import { API_BASE } from './config';
 
 // ── Header helpers ────────────────────────────────────────────────
 

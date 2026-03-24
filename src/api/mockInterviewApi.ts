@@ -1,8 +1,10 @@
 import axios from 'axios';
 import { SessionManager } from '../utils/sessionManager';
 
+import { API_BASE } from './config';
+
 const api = axios.create({
-    baseURL: import.meta.env.VITE_API_URL || '/api',
+    baseURL: API_BASE,
 });
 
 api.interceptors.request.use(config => {
