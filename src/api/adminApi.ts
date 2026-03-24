@@ -3,7 +3,7 @@ import { API_BASE } from './config';
 import { SessionManager } from '../utils/sessionManager';
 
 const api = axios.create({
-    baseURL: API_BASE,
+    baseURL: `${API_BASE}/api`,
     // interceptors handle auth automatically like in database.ts
 });
 

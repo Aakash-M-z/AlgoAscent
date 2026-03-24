@@ -29,7 +29,7 @@ export class DatabaseAPI {
 
   async login(email: string, password: string): Promise<AuthResponse | null> {
     try {
-      const res = await fetch(`${API_BASE}/login`, {
+      const res = await fetch(`${API_BASE}/api/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password }),
@@ -41,7 +41,7 @@ export class DatabaseAPI {
 
   async register(email: string, password: string, username: string): Promise<AuthResponse | null> {
     try {
-      const res = await fetch(`${API_BASE}/register`, {
+      const res = await fetch(`${API_BASE}/api/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password, username }),
@@ -53,7 +53,7 @@ export class DatabaseAPI {
 
   async googleAuth(accessToken: string): Promise<AuthResponse | null> {
     try {
-      const res = await fetch(`${API_BASE}/auth/google`, {
+      const res = await fetch(`${API_BASE}/api/auth/google`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ token: accessToken }),
@@ -67,7 +67,7 @@ export class DatabaseAPI {
   
   async getProfile(): Promise<User | null> {
     try {
-      const res = await fetch(`${API_BASE}/user/profile`, { headers: authHeaders() });
+      const res = await fetch(`${API_BASE}/api/user/profile`, { headers: authHeaders() });
       if (!res.ok) return null;
       return res.json();
     } catch { return null; }
@@ -75,7 +75,7 @@ export class DatabaseAPI {
 
   async updateProfile(data: Partial<User>): Promise<User | null> {
     try {
-      const res = await fetch(`${API_BASE}/user/profile`, {
+      const res = await fetch(`${API_BASE}/api/user/profile`, {
         method: 'PUT',
         headers: authHeaders(),
         body: JSON.stringify(data),
@@ -89,7 +89,7 @@ export class DatabaseAPI {
 
   async getUser(id: string | number): Promise<User | null> {
     try {
-      const res = await fetch(`${API_BASE}/users/${id}`, { headers: authHeaders() });
+      const res = await fetch(`${API_BASE}/api/users/${id}`, { headers: authHeaders() });
       if (!res.ok) return null;
       return res.json();
     } catch { return null; }
@@ -97,7 +97,7 @@ export class DatabaseAPI {
 
   async getUserByUsername(username: string): Promise<User | null> {
     try {
-      const res = await fetch(`${API_BASE}/users/by-username/${username}`, { headers: authHeaders() });
+      const res = await fetch(`${API_BASE}/api/users/by-username/${username}`, { headers: authHeaders() });
       if (!res.ok) return null;
       return res.json();
     } catch { return null; }
@@ -105,7 +105,7 @@ export class DatabaseAPI {
 
   async createUser(userData: InsertUser): Promise<User | null> {
     try {
-      const res = await fetch(`${API_BASE}/register`, {
+      const res = await fetch(`${API_BASE}/api/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(userData),
@@ -120,7 +120,7 @@ export class DatabaseAPI {
 
   async getUserActivities(userId: string | number): Promise<Activity[]> {
     try {
-      const res = await fetch(`${API_BASE}/users/${userId}/activities`, { headers: authHeaders() });
+      const res = await fetch(`${API_BASE}/api/users/${userId}/activities`, { headers: authHeaders() });
       if (!res.ok) { console.error(`Failed to fetch activities: ${res.status}`); return []; }
       return res.json();
     } catch (e) { console.error('getUserActivities:', e); return []; }
@@ -128,7 +128,7 @@ export class DatabaseAPI {
 
   async createActivity(activityData: InsertActivity): Promise<Activity | null> {
     try {
-      const res = await fetch(`${API_BASE}/activities`, {
+      const res = await fetch(`${API_BASE}/api/activities`, {
         method: 'POST',
         headers: authHeaders(),
         body: JSON.stringify(activityData),
@@ -140,7 +140,7 @@ export class DatabaseAPI {
 
   async updateActivity(id: string | number, activityData: Partial<Activity>): Promise<Activity | null> {
     try {
-      const res = await fetch(`${API_BASE}/activities/${id}`, {
+      const res = await fetch(`${API_BASE}/api/activities/${id}`, {
         method: 'PUT',
         headers: authHeaders(),
         body: JSON.stringify(activityData),
@@ -152,7 +152,7 @@ export class DatabaseAPI {
 
   async deleteActivity(id: string | number): Promise<boolean> {
     try {
-      const res = await fetch(`${API_BASE}/activities/${id}`, { method: 'DELETE', headers: authHeaders() });
+      const res = await fetch(`${API_BASE}/api/activities/${id}`, { method: 'DELETE', headers: authHeaders() });
       return res.ok;
     } catch { return false; }
   }
@@ -161,7 +161,7 @@ export class DatabaseAPI {
 
   async getUserTasks(userId: string): Promise<Task[]> {
     try {
-      const res = await fetch(`${API_BASE}/users/${userId}/tasks`, { headers: authHeaders() });
+      const res = await fetch(`${API_BASE}/api/users/${userId}/tasks`, { headers: authHeaders() });
       if (!res.ok) return [];
       return res.json();
     } catch { return []; }
@@ -169,7 +169,7 @@ export class DatabaseAPI {
 
   async createTask(task: InsertTask): Promise<Task | null> {
     try {
-      const res = await fetch(`${API_BASE}/tasks`, {
+      const res = await fetch(`${API_BASE}/api/tasks`, {
         method: 'POST', headers: authHeaders(), body: JSON.stringify(task),
       });
       if (!res.ok) return null;
@@ -179,7 +179,7 @@ export class DatabaseAPI {
 
   async updateTask(id: string, data: Partial<Task>): Promise<Task | null> {
     try {
-      const res = await fetch(`${API_BASE}/tasks/${id}`, {
+      const res = await fetch(`${API_BASE}/api/tasks/${id}`, {
         method: 'PATCH', headers: authHeaders(), body: JSON.stringify(data),
       });
       if (!res.ok) return null;
@@ -189,7 +189,7 @@ export class DatabaseAPI {
 
   async deleteTask(id: string): Promise<boolean> {
     try {
-      const res = await fetch(`${API_BASE}/tasks/${id}`, { method: 'DELETE', headers: authHeaders() });
+      const res = await fetch(`${API_BASE}/api/tasks/${id}`, { method: 'DELETE', headers: authHeaders() });
       return res.ok;
     } catch { return false; }
   }
@@ -263,7 +263,7 @@ export class DatabaseAPI {
     nextMilestone: string;
   } | null> {
     try {
-      const res = await fetch(`${API_BASE}/ai/analyze`, {
+      const res = await fetch(`${API_BASE}/api/ai/analyze`, {
         method: 'POST',
         headers: authHeaders(),
         body: JSON.stringify({ activities, username }),
@@ -279,7 +279,7 @@ export class DatabaseAPI {
     subtopics: string[],
     interviewQuestions: string[],
   ): Promise<{ explanation: string | null; fallback?: boolean; errorCode?: string; keyPoints?: string[] }> {
-    const res = await fetch(`${API_BASE}/ai/explain-topic`, {
+    const res = await fetch(`${API_BASE}/api/ai/explain-topic`, {
       method: 'POST',
       headers: authHeaders(),
       body: JSON.stringify({ subject, topic, subtopics, interviewQuestions }),
@@ -309,7 +309,7 @@ export class DatabaseAPI {
     plan: string; usageToday: number; limit: number; remaining: number | null;
   } | null> {
     try {
-      const res = await fetch(`${API_BASE}/users/${userId}/ai-usage`, { headers: authHeaders() });
+      const res = await fetch(`${API_BASE}/api/users/${userId}/ai-usage`, { headers: authHeaders() });
       if (!res.ok) return null;
       return res.json();
     } catch { return null; }
@@ -335,7 +335,7 @@ export class DatabaseAPI {
         solved: a.solved ?? a.problemSolved ?? false,
         date: typeof a.date === 'string' ? a.date : new Date(a.date).toISOString(),
       }));
-      const res = await fetch(`${API_BASE}/recommendations`, {
+      const res = await fetch(`${API_BASE}/api/recommendations`, {
         method: 'POST',
         headers: authHeaders(),
         body: JSON.stringify({ activities: payload }),
