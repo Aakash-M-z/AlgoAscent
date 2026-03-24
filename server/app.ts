@@ -4,6 +4,7 @@ import axios, { AxiosError } from 'axios';
 import { storage } from './storage.js';
 import { InsertUser, InsertActivity, InsertTask } from '../shared/schema.js';
 import { signToken, verifyToken, extractBearer, JwtPayload } from './jwt.js';
+import { sendWelcomeEmail } from './email.js';
 import adminRoutes from './adminRoutes.js';
 import userRoutes from './userRoutes.js';
 import interviewRoutes from './interviewRoutes.js';
@@ -93,6 +94,10 @@ api.post('/register', async (req, res) => {
         const user = await storage.createUser(userData);
         const { password: _, ...safeUser } = user;
         const jwtToken = signToken({ id: user.id, email: user.email, role: user.role, plan: (user as any).plan ?? 'free' });
+        
+        // Background email — don't await to avoid registration lag
+        sendWelcomeEmail(user.email, user.username).catch(() => {});
+        
         res.status(201).json({ user: safeUser, token: jwtToken });
     } catch (error) {
         console.error('Register error:', error);
@@ -135,6 +140,12 @@ api.post('/auth/google', async (req, res) => {
         }
         const { password: _, ...safeUser } = user;
         const jwtToken = signToken({ id: user.id, email: user.email, role: user.role, plan: (user as any).plan ?? 'free' });
+        
+        // Background email for new users — don't await
+        if (user.createdAt && (Date.now() - new Date(user.createdAt).getTime()) < 10000) {
+            sendWelcomeEmail(user.email, user.username).catch(() => {});
+        }
+        
         res.json({ user: safeUser, token: jwtToken });
     } catch (error) {
         console.error('Google auth error:', error);
