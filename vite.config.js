@@ -26,12 +26,18 @@ export default defineConfig({
         target: BACKEND_URL,
         changeOrigin: true,
         secure: false,
+        // Google OAuth userinfo fetch can take 3-8s — default proxy timeout is too short
+        proxyTimeout: 30000,
+        timeout: 30000,
         configure: (proxy) => {
           proxy.on('error', (err, _req, res) => {
             const isRefused = err.code === 'ECONNREFUSED';
+            const isReset = err.code === 'ECONNRESET';
             const msg = isRefused
               ? `Backend not running on port ${BACKEND_PORT}. Run: npm run server`
-              : `Proxy error (${err.code}): ${err.message}`;
+              : isReset
+                ? `Backend closed connection (ECONNRESET) — likely a slow outbound request (e.g. Google OAuth). Check server logs.`
+                : `Proxy error (${err.code}): ${err.message}`;
             console.error('\n[vite proxy] ❌', msg, '\n');
             if (!res.headersSent) {
               res.writeHead(503, { 'Content-Type': 'application/json' });
