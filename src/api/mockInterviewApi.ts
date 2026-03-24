@@ -1,7 +1,7 @@
 import axios from 'axios';
 import { SessionManager } from '../utils/sessionManager';
 
-import { API_BASE } from './config';
+import { API_BASE, CODE_EXECUTION_BASE } from './config';
 
 const api = axios.create({
     baseURL: `${API_BASE}/api`,
@@ -70,7 +70,7 @@ export const mockInterviewApi = {
         language: string;
         input: string;
     }) => {
-        const response = await axios.post("https://code-execution-backend-qq01.onrender.com/run-code", payload, {
+        const response = await axios.post(`${CODE_EXECUTION_BASE}/run-code`, payload, {
             headers: { 'Content-Type': 'application/json' },
         });
         return response.data;
