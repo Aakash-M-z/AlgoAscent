@@ -40,7 +40,8 @@ const Login: React.FC<LoginProps> = ({ onLogin, onBack }) => {
   const [serverDown, setServerDown] = useState(false);
 
   useEffect(() => {
-    fetch('/api/health')
+    const API_BASE = import.meta.env.VITE_API_URL || '/api';
+    fetch(`${API_BASE}/health`)
       .then(r => { if (!r.ok) setServerDown(true); })
       .catch(() => setServerDown(true));
   }, []);
