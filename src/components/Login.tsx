@@ -41,7 +41,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, onBack }) => {
   const [serverDown, setServerDown] = useState(false);
 
   useEffect(() => {
-    fetch(`${API_BASE}/health`)
+    fetch(`${API_BASE}/api/health`)
       .then(r => { if (!r.ok) setServerDown(true); })
       .catch(() => setServerDown(true));
   }, []);
