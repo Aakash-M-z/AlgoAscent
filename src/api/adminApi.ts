@@ -1,8 +1,9 @@
 import axios from 'axios';
+import { API_BASE } from './config';
 import { SessionManager } from '../utils/sessionManager';
 
 const api = axios.create({
-    baseURL: import.meta.env.VITE_API_URL || '/api',
+    baseURL: API_BASE,
     // interceptors handle auth automatically like in database.ts
 });
 
@@ -15,7 +16,6 @@ api.interceptors.request.use(config => {
 export const adminApi = {
     // 1. User Management (extending databaseAPI)
     deleteUsersBulk: async (userIds: string[]) => {
-        // we'd probably implement this in backend, or loop for now
         for (const id of userIds) {
             await api.delete(`/admin/users/${id}`);
         }

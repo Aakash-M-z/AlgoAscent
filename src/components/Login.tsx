@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useGoogleLogin } from '@react-oauth/google';
 import { useAuth } from '../contexts/AuthContext';
 import { databaseAPI } from '../api/database';
+import { API_BASE } from '../api/config';
 import ParticleBackground from './ParticleBackground';
 
 interface LoginProps {
@@ -40,7 +41,6 @@ const Login: React.FC<LoginProps> = ({ onLogin, onBack }) => {
   const [serverDown, setServerDown] = useState(false);
 
   useEffect(() => {
-    const API_BASE = import.meta.env.VITE_API_URL || '/api';
     fetch(`${API_BASE}/health`)
       .then(r => { if (!r.ok) setServerDown(true); })
       .catch(() => setServerDown(true));
@@ -106,7 +106,6 @@ const Login: React.FC<LoginProps> = ({ onLogin, onBack }) => {
     <>
       {loading && <LoadingOverlay text={loadingText} />}
 
-      {/* ── Full-screen container ── */}
       <div style={{
         position: 'fixed', inset: 0, zIndex: 50,
         background: '#080808',
@@ -114,7 +113,6 @@ const Login: React.FC<LoginProps> = ({ onLogin, onBack }) => {
         overflow: 'hidden',
       }}>
 
-        {/* ── Particle canvas — fills entire screen ── */}
         <ParticleBackground
           particleCount={65}
           particleColor="212,175,55"
@@ -124,7 +122,6 @@ const Login: React.FC<LoginProps> = ({ onLogin, onBack }) => {
           className="z-0"
         />
 
-        {/* ── Ambient corner glows ── */}
         <div style={{
           position: 'absolute', inset: 0, zIndex: 1, pointerEvents: 'none',
           background: [
@@ -134,7 +131,6 @@ const Login: React.FC<LoginProps> = ({ onLogin, onBack }) => {
           ].join(', '),
         }} />
 
-        {/* ── Floating orb behind card ── */}
         <div style={{
           position: 'absolute', zIndex: 2, pointerEvents: 'none',
           width: '520px', height: '520px',
@@ -145,7 +141,6 @@ const Login: React.FC<LoginProps> = ({ onLogin, onBack }) => {
           left: '50%', top: '50%',
         }} />
 
-        {/* ── Back button ── */}
         {onBack && (
           <button onClick={onBack} style={{
             position: 'absolute', top: '24px', left: '24px', zIndex: 20,
@@ -160,7 +155,6 @@ const Login: React.FC<LoginProps> = ({ onLogin, onBack }) => {
           >← Back</button>
         )}
 
-        {/* ── Brand watermark top-center ── */}
         <div style={{
           position: 'absolute', top: '28px', left: '50%', transform: 'translateX(-50%)',
           zIndex: 20, display: 'flex', alignItems: 'center', gap: '8px',
@@ -170,14 +164,12 @@ const Login: React.FC<LoginProps> = ({ onLogin, onBack }) => {
           <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#D4AF37', letterSpacing: '0.18em', textTransform: 'uppercase' }}>AlgoAscent</span>
         </div>
 
-        {/* ── Login card ── */}
         <div style={{
           position: 'relative', zIndex: 10,
           width: '100%', maxWidth: '420px',
           margin: '0 20px',
           animation: 'cardMount 0.45s cubic-bezier(0.22,1,0.36,1) both',
         }}>
-          {/* Gold border glow */}
           <div style={{
             position: 'absolute', inset: '-1px', borderRadius: '22px',
             background: 'linear-gradient(135deg, rgba(212,175,55,0.28), rgba(212,175,55,0.04), rgba(212,175,55,0.18))',
@@ -192,7 +184,6 @@ const Login: React.FC<LoginProps> = ({ onLogin, onBack }) => {
             backdropFilter: 'blur(24px)',
           }}>
 
-            {/* Header */}
             <div style={{ textAlign: 'center', marginBottom: '26px' }}>
               <div style={{
                 display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
@@ -221,7 +212,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, onBack }) => {
                   display: 'flex', alignItems: 'center', gap: '8px',
                 }}>
                   <span>⚠</span>
-                  <span>Backend not running. Start with <code style={{ background: 'rgba(255,255,255,0.06)', padding: '1px 5px', borderRadius: '4px' }}>npm run server</code></span>
+                  <span>Backend not running. Ensure your Render backend is active.</span>
                 </div>
               )}
 
@@ -230,8 +221,6 @@ const Login: React.FC<LoginProps> = ({ onLogin, onBack }) => {
                   <label style={{ display: 'block', fontSize: '0.72rem', fontWeight: 700, color: '#555', marginBottom: '6px', letterSpacing: '0.08em' }}>USERNAME</label>
                   <input type="text" value={username} onChange={e => setUsername(e.target.value)}
                     placeholder="Choose a username" style={inputStyle}
-                    onFocus={e => { e.currentTarget.style.borderColor = '#D4AF37'; e.currentTarget.style.boxShadow = '0 0 0 3px rgba(212,175,55,0.1)'; }}
-                    onBlur={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)'; e.currentTarget.style.boxShadow = 'none'; }}
                   />
                 </div>
               )}
@@ -240,8 +229,6 @@ const Login: React.FC<LoginProps> = ({ onLogin, onBack }) => {
                 <label style={{ display: 'block', fontSize: '0.72rem', fontWeight: 700, color: '#555', marginBottom: '6px', letterSpacing: '0.08em' }}>EMAIL</label>
                 <input type="email" value={email} onChange={e => setEmail(e.target.value)}
                   placeholder="Enter your email" style={inputStyle}
-                  onFocus={e => { e.currentTarget.style.borderColor = '#D4AF37'; e.currentTarget.style.boxShadow = '0 0 0 3px rgba(212,175,55,0.1)'; }}
-                  onBlur={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)'; e.currentTarget.style.boxShadow = 'none'; }}
                 />
               </div>
 
@@ -249,8 +236,6 @@ const Login: React.FC<LoginProps> = ({ onLogin, onBack }) => {
                 <label style={{ display: 'block', fontSize: '0.72rem', fontWeight: 700, color: '#555', marginBottom: '6px', letterSpacing: '0.08em' }}>PASSWORD</label>
                 <input type="password" value={password} onChange={e => setPassword(e.target.value)}
                   placeholder="Enter your password" style={inputStyle}
-                  onFocus={e => { e.currentTarget.style.borderColor = '#D4AF37'; e.currentTarget.style.boxShadow = '0 0 0 3px rgba(212,175,55,0.1)'; }}
-                  onBlur={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)'; e.currentTarget.style.boxShadow = 'none'; }}
                 />
               </div>
 
@@ -269,11 +254,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, onBack }) => {
                 cursor: loading ? 'not-allowed' : 'pointer', marginTop: '2px',
                 boxShadow: '0 4px 24px rgba(212,175,55,0.28)',
                 opacity: loading ? 0.7 : 1, fontFamily: 'Inter, sans-serif',
-                transition: 'opacity 0.2s, box-shadow 0.2s',
-              }}
-                onMouseEnter={e => { if (!loading) (e.currentTarget as HTMLElement).style.boxShadow = '0 6px 32px rgba(212,175,55,0.45)'; }}
-                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.boxShadow = '0 4px 24px rgba(212,175,55,0.28)'; }}
-              >
+              }}>
                 {isLogin ? 'Sign In' : 'Create Account'}
               </button>
 
@@ -288,11 +269,8 @@ const Login: React.FC<LoginProps> = ({ onLogin, onBack }) => {
                 display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px',
                 background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)',
                 borderRadius: '10px', color: '#EAEAEA', fontSize: '0.875rem', fontWeight: 500,
-                cursor: 'pointer', transition: 'border-color 0.2s, background 0.2s',
-              }}
-                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = 'rgba(212,175,55,0.3)'; (e.currentTarget as HTMLElement).style.background = 'rgba(212,175,55,0.05)'; }}
-                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,255,255,0.08)'; (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.03)'; }}
-              >
+                cursor: 'pointer',
+              }}>
                 <svg width="18" height="18" viewBox="0 0 24 24">
                   <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4" />
                   <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853" />
@@ -310,11 +288,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, onBack }) => {
               <button onClick={toggleMode} style={{
                 color: '#D4AF37', fontWeight: 600, background: 'none',
                 border: 'none', cursor: 'pointer', fontSize: '0.82rem',
-                transition: 'opacity 0.2s',
-              }}
-                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.opacity = '0.75'; }}
-                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.opacity = '1'; }}
-              >
+              }}>
                 {isLogin ? 'Sign Up' : 'Sign In'}
               </button>
             </div>
