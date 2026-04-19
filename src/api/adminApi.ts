@@ -14,7 +14,31 @@ api.interceptors.request.use(config => {
 });
 
 export const adminApi = {
-    // 1. User Management (extending databaseAPI)
+    // 1. User Management
+    getUsers: async () => {
+        const res = await api.get('/admin/users', {
+            headers: { 'Cache-Control': 'no-store' },
+        });
+        return res.data;
+    },
+    createUser: async (data: {
+        username: string;
+        email: string;
+        password?: string;
+        role: 'admin' | 'user';
+        plan: 'free' | 'premium';
+        sendWelcome: boolean;
+    }) => {
+        const res = await api.post('/admin/users', data);
+        return res.data;
+    },
+    updateUser: async (id: string, data: { role?: 'admin' | 'user'; plan?: 'free' | 'premium' }) => {
+        const res = await api.patch(`/admin/users/${id}`, data);
+        return res.data;
+    },
+    deleteUser: async (id: string) => {
+        await api.delete(`/admin/users/${id}`);
+    },
     deleteUsersBulk: async (userIds: string[]) => {
         for (const id of userIds) {
             await api.delete(`/admin/users/${id}`);
