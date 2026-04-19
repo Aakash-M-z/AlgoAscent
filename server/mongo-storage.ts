@@ -11,7 +11,7 @@ export let mongoConnected = false;
  */
 export async function connectMongo(): Promise<boolean> {
     const uri = process.env.MONGODB_URI || '';
-    
+
     if (!uri) {
         console.error('❌ MONGODB_URI is not defined in .env file');
         return false;
@@ -32,7 +32,7 @@ export async function connectMongo(): Promise<boolean> {
         return true;
     } catch (err: any) {
         mongoConnected = false;
-        
+
         let errorHint = '';
         if (err.message.includes('authentication failed')) {
             errorHint = 'Check your MongoDB Atlas username and password (ensure special chars are URL encoded).';
@@ -42,7 +42,7 @@ export async function connectMongo(): Promise<boolean> {
 
         console.error(`❌ MongoDB Connection Failed: ${err.message}`);
         if (errorHint) console.error(`💡 Hint: ${errorHint}`);
-        
+
         return false;
     }
 }
@@ -170,6 +170,7 @@ export class MongoStorage implements IStorage {
             learningGoal: doc.learningGoal,
             role: doc.role ?? 'user',
             plan: doc.plan ?? 'free',
+            isActive: doc.isActive !== false, // default true for existing docs without field
             aiUsageCount: doc.aiUsageCount ?? 0,
             aiUsageResetAt: doc.aiUsageResetAt ?? new Date().toISOString().slice(0, 10),
             createdAt: doc.createdAt,
