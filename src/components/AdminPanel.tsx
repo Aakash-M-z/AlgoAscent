@@ -64,7 +64,7 @@ const AdminPanel: React.FC = () => {
                     </h2>
                     <p className="text-gray-400 mt-2 text-sm">
                         Welcome back, <span className="font-bold text-white">{user.username}</span>.{' '}
-                        {isOffline ? 'System running in fallback mode.' : 'System is operating normally.'}
+                        System is operating normally.
                     </p>
                 </div>
                 <div className="hidden md:flex gap-3">
