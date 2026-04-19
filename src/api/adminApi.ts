@@ -16,9 +16,7 @@ api.interceptors.request.use(config => {
 export const adminApi = {
     // 1. User Management
     getUsers: async () => {
-        const res = await api.get('/admin/users', {
-            headers: { 'Cache-Control': 'no-store' },
-        });
+        const res = await api.get('/admin/users');
         return res.data;
     },
     createUser: async (data: {
