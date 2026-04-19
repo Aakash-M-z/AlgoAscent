@@ -9,7 +9,10 @@
     "dev:all": "concurrently -n \"server,vite\" -c \"yellow,cyan\" \"npm run server\" \"npm run dev\"",
     "start": "tsx server/index.ts",
     "build": "tsc && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "ingest": "tsx scripts/ingest-leetcode.ts",
+    "ingest:dry": "tsx scripts/ingest-leetcode.ts --dry-run",
+    "test:email": "tsx scripts/test-email.ts"
   },
   "devDependencies": {
     "@types/react": "^19.1.8",
@@ -27,14 +30,18 @@
     "@react-oauth/google": "^0.13.4",
     "@sendgrid/mail": "^8.1.5",
     "@tailwindcss/postcss": "^4.1.11",
+    "@types/bcryptjs": "^2.4.6",
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.3",
     "@types/jsonwebtoken": "^9.0.10",
     "@types/memoizee": "^0.4.12",
+    "@types/nodemailer": "^8.0.0",
     "@types/react-syntax-highlighter": "^15.5.13",
     "autoprefixer": "^10.4.21",
     "axios": "^1.13.6",
+    "bcryptjs": "^3.0.3",
     "cors": "^2.8.5",
+    "csv-parse": "^6.2.1",
     "date-fns": "^4.1.0",
     "dotenv": "^17.2.1",
     "express": "^5.1.0",
@@ -44,6 +51,7 @@
     "lucide-react": "^0.577.0",
     "memoizee": "^0.4.17",
     "mongoose": "^9.1.5",
+    "nodemailer": "^8.0.5",
     "openai": "^6.32.0",
     "openid-client": "^6.6.2",
     "postcss": "^8.5.6",
@@ -59,6 +67,7 @@
     "resend": "^6.9.4",
     "tailwindcss": "^3.3.5",
     "tsx": "^4.20.3",
-    "ws": "^8.18.3"
+    "ws": "^8.18.3",
+    "zod": "^4.3.6"
   }
 }
