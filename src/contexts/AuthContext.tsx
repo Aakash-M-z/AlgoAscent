@@ -48,8 +48,20 @@ async function verifySession(token: string): Promise<User | null> {
 
     if (!res.ok) return null; // server error — keep session, retry later
 
-    const user = await res.json();
-    return user as User;
+    const raw = await res.json();
+    // Normalize — same as toUser() — ensures name is always populated
+    const user: User = {
+      id: raw.id ?? raw._id,
+      email: raw.email,
+      name: raw.name ?? raw.username ?? raw.email?.split('@')[0] ?? 'User',
+      username: raw.username,
+      role: raw.role ?? 'user',
+      plan: raw.plan ?? 'free',
+      isActive: raw.isActive !== false,
+      aiUsageCount: raw.aiUsageCount ?? 0,
+      aiUsageResetAt: raw.aiUsageResetAt ?? new Date().toISOString().slice(0, 10),
+    };
+    return user;
   } catch {
     // Network offline — keep local session, don't force logout
     return SessionManager.getUser();

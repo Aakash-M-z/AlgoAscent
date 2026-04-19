@@ -114,7 +114,8 @@ const Header: React.FC<HeaderProps> = () => {
     { label: 'Manage Users', icon: '◎', path: '/dashboard/admin' },
   ] : [];
 
-  const initials = user?.name?.charAt(0).toUpperCase() || 'U';
+  const displayName = user?.name && user.name !== 'Guest' ? user.name : (user?.username ?? 'User');
+  const initials = displayName.charAt(0).toUpperCase();
 
   return (
     <>
@@ -209,7 +210,7 @@ const Header: React.FC<HeaderProps> = () => {
                 </div>
                 <div className="hidden sm:block text-left">
                   <p style={{ fontSize: '0.8rem', fontWeight: 600, color: '#EAEAEA', lineHeight: 1.2 }}>
-                    {user?.name || 'Guest'}
+                    {displayName}
                   </p>
                   <p style={{ fontSize: '0.6rem', color: '#D4AF37', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
                     {user?.role || 'Member'}
@@ -259,7 +260,7 @@ const Header: React.FC<HeaderProps> = () => {
                     </div>
                     <div style={{ minWidth: 0 }}>
                       <p style={{ fontSize: '0.85rem', fontWeight: 600, color: '#EAEAEA', lineHeight: 1.3 }}>
-                        {user?.name || 'Guest'}
+                        {displayName}
                       </p>
                       <p style={{
                         fontSize: '0.72rem', color: '#555',
