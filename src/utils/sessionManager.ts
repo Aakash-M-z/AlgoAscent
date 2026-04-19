@@ -22,7 +22,11 @@ export class SessionManager {
             if (!raw) return null;
             const { user, ts } = JSON.parse(raw);
             if (Date.now() - ts > SESSION_TTL) { this.clearSession(); return null; }
-            if (!user?.id || !user?.email || !user?.role) { this.clearSession(); return null; }
+            // Only clear if truly missing identity fields — role defaults to 'user' if absent
+            // so stale sessions without role don't force a logout
+            if (!user?.id || !user?.email) { this.clearSession(); return null; }
+            // Backfill role if missing from old session (migration safety)
+            if (!user.role) user.role = 'user';
             return user as User;
         } catch {
             this.clearSession();

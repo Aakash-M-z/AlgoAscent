@@ -20,9 +20,6 @@ const initializeTheme = () => {
 
 initializeTheme();
 
-// Clear stale intro flag so the loading animation always plays
-localStorage.removeItem('intro_seen');
-
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || '';
 
 ReactDOM.createRoot(document.getElementById('app')!).render(

@@ -468,7 +468,9 @@ const AppContent: React.FC = () => {
     const [dataLoading, setDataLoading] = useState(false);
     const [showOnboarding, setShowOnboarding] = useState(false);
     const [showHomePage, setShowHomePage] = useState(false);
-    const [showIntro, setShowIntro] = useState(true);
+    // Only show intro if user is NOT already logged in (no stored session)
+    // This prevents the intro from blocking route restoration on refresh
+    const [showIntro, setShowIntro] = useState(() => !SessionManager.isSessionValid());
     const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
 
     // Check onboarding on first auth
@@ -494,15 +496,17 @@ const AppContent: React.FC = () => {
         }
     }, [location.state]);
 
-    // Load activities when authenticated
+    // Load activities when authenticated — dep on user.id only, not the whole object
+    // Using user object as dep causes re-fetch on every render since AuthContext
+    // creates a new object reference each time
     useEffect(() => {
-        if (!isAuthenticated || !user) return;
+        if (!isAuthenticated || !user?.id) return;
         setDataLoading(true);
         databaseAPI.getUserActivities(user.id)
             .then(raw => setActivities(raw.map(dbToFrontendActivity)))
             .catch(() => toast('Failed to load activities', 'error'))
             .finally(() => setDataLoading(false));
-    }, [isAuthenticated, user]);
+    }, [isAuthenticated, user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
     const handleAddActivity = useCallback(async (activity: Activity): Promise<boolean> => {
         try {
@@ -555,6 +559,7 @@ const AppContent: React.FC = () => {
     }
 
     if (!isAuthenticated && isDashboardPath) {
+        // Only show login/intro if auth has fully loaded — prevents flash-redirect on refresh
         return (
             <>
                 {showIntro && (

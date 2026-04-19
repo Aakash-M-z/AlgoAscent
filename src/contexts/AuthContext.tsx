@@ -1,6 +1,7 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import { User, AuthContextType, AuthResponse } from '../types/auth';
 import { SessionManager } from '../utils/sessionManager';
+import { API_BASE } from '../api/config';
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
@@ -10,18 +11,49 @@ export const useAuth = () => {
   return ctx;
 };
 
-/** Normalize the API user shape → frontend User (maps username → name) */
 function toUser(raw: AuthResponse['user']): User {
+  const role = (raw as any).role ?? 'user';
   return {
     id: raw.id,
     email: raw.email,
     name: (raw as any).name ?? raw.username ?? raw.email.split('@')[0],
     username: raw.username,
-    role: raw.role,
-    plan: raw.plan,
+    role: role as 'admin' | 'user',
+    plan: ((raw as any).plan ?? 'free') as 'free' | 'premium',
     aiUsageCount: (raw as any).aiUsageCount,
     aiUsageResetAt: (raw as any).aiUsageResetAt,
   };
+}
+
+/**
+ * Verify stored session against the backend.
+ * Returns the user if still active, null if deactivated/deleted/expired.
+ */
+async function verifySession(token: string): Promise<User | null> {
+  try {
+    const res = await fetch(`${API_BASE}/api/user/profile`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+
+    if (res.status === 401) {
+      // Account deactivated or token invalid — clear immediately
+      const data = await res.json().catch(() => ({}));
+      if (data?.error === 'ACCOUNT_DEACTIVATED') {
+        sessionStorage.setItem('account_deactivated_msg',
+          data.message || 'Your account has been deactivated.');
+      }
+      SessionManager.clearSession();
+      return null;
+    }
+
+    if (!res.ok) return null; // server error — keep session, retry later
+
+    const user = await res.json();
+    return user as User;
+  } catch {
+    // Network offline — keep local session, don't force logout
+    return SessionManager.getUser();
+  }
 }
 
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
@@ -30,42 +62,62 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   useEffect(() => {
     const stored = SessionManager.getUser();
-    if (stored && SessionManager.getToken()) setUser(stored);
-    setIsLoading(false);
+    const token = SessionManager.getToken();
+
+    if (!stored || !token) {
+      // No local session at all
+      setIsLoading(false);
+      return;
+    }
+
+    // Optimistically set user from localStorage so UI doesn't flash
+    setUser(stored);
+
+    // Then verify with backend — catches deactivated accounts
+    verifySession(token).then(verified => {
+      if (verified) {
+        // Update with fresh data from server
+        setUser(verified);
+        SessionManager.saveSession(verified, token);
+      } else {
+        // Account gone or deactivated — clear everything
+        setUser(null);
+        SessionManager.clearSession();
+      }
+    }).finally(() => {
+      setIsLoading(false);
+    });
   }, []);
 
-  const login = (response: AuthResponse | User, token?: string) => {
+  const login = useCallback((response: AuthResponse | User, token?: string) => {
     let u: User;
     let t: string;
 
     if ('token' in response && 'user' in response) {
-      // New shape: { user, token }
       u = toUser((response as AuthResponse).user);
       t = (response as AuthResponse).token;
     } else {
-      // Legacy bare User
       u = response as User;
       t = token ?? SessionManager.getToken() ?? '';
     }
 
     setUser(u);
     SessionManager.saveSession(u, t);
-  };
+  }, []);
 
-  const logout = () => {
+  const logout = useCallback(() => {
     setUser(null);
     SessionManager.clearSession();
-    window.location.reload();
-  };
+  }, []);
 
-  const updateUser = (partial: Partial<User>) => {
+  const updateUser = useCallback((partial: Partial<User>) => {
     setUser(prev => {
       if (!prev) return prev;
       const updated = { ...prev, ...partial };
       SessionManager.saveSession(updated, SessionManager.getToken() ?? '');
       return updated;
     });
-  };
+  }, []);
 
   return (
     <AuthContext.Provider value={{ user, isAuthenticated: !!user, isLoading, login, logout, updateUser }}>
