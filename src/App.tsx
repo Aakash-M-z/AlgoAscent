@@ -561,7 +561,11 @@ const AppContent: React.FC = () => {
     if (!isAuthenticated && isDashboardPath) {
         // Only show login/intro if auth has fully loaded — prevents flash-redirect on refresh
         return (
-            <>
+            <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ duration: 0.4, ease: 'easeOut' }}
+            >
                 {showIntro && (
                     <IntroScreen onDone={() => setShowIntro(false)} />
                 )}
@@ -572,7 +576,7 @@ const AppContent: React.FC = () => {
                 }}>
                     <Login />
                 </div>
-            </>
+            </motion.div>
         );
     }
 
