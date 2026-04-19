@@ -12,15 +12,14 @@ import { useNavigate } from 'react-router-dom';
 
 const LandingPage = () => {
     const [isLoading, setIsLoading] = useState(false);
-    // Track whether content has mounted to trigger smooth fade-in
     const [contentVisible, setContentVisible] = useState(false);
+    // Fade out the landing page content while intro plays — prevents flash
+    const [contentFading, setContentFading] = useState(false);
     const navigate = useNavigate();
-    // Prevent double-fire of handleGetStarted
     const loadingRef = useRef(false);
 
     useEffect(() => {
         window.scrollTo({ top: 0, behavior: 'instant' });
-        // Slight delay before showing content for smooth entry
         const t = requestAnimationFrame(() => setContentVisible(true));
         return () => cancelAnimationFrame(t);
     }, []);
@@ -28,30 +27,33 @@ const LandingPage = () => {
     const handleGetStarted = useCallback(() => {
         if (loadingRef.current) return;
         loadingRef.current = true;
+        // Fade out landing content immediately so it doesn't show through
+        setContentFading(true);
         setIsLoading(true);
     }, []);
 
     const handleLoadingComplete = useCallback(() => {
+        // Navigate — landing page is already invisible so no flash
         navigate('/dashboard', { state: { fromGetStarted: true } });
     }, [navigate]);
 
     return (
         <>
-            {/* Intro screen renders on top — completely separate from page content */}
+            {/* Intro screen — full screen overlay, z-index above everything */}
             <AnimatePresence>
                 {isLoading && (
                     <IntroScreen key="loader" onDone={handleLoadingComplete} duration={2000} />
                 )}
             </AnimatePresence>
 
-            {/* Page content — always mounted, fades in on load */}
+            {/* Landing page content — fades out when intro starts */}
             <motion.div
                 initial={{ opacity: 0 }}
-                animate={{ opacity: contentVisible ? 1 : 0 }}
-                transition={{ duration: 0.6, ease: 'easeOut' }}
+                animate={{ opacity: contentFading ? 0 : contentVisible ? 1 : 0 }}
+                transition={{ duration: contentFading ? 0.3 : 0.6, ease: 'easeOut' }}
                 className="bg-[#080808] min-h-screen selection:bg-gold selection:text-black scroll-smooth relative"
+                style={{ pointerEvents: contentFading ? 'none' : 'all' }}
             >
-                {/* Reduced particle count for performance — 80 instead of 140 */}
                 <ParticleBackground
                     particleCount={80}
                     particleColor="210, 210, 210"
