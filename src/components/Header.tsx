@@ -18,15 +18,15 @@ const LogoutModal: React.FC<{ onConfirm: () => void; onCancel: () => void }> = (
 
   return createPortal(
     <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 min-h-screen">
-      <motion.div 
+      <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
         onClick={onCancel}
         className="absolute inset-0 bg-black/70 backdrop-blur-md"
       />
-      
-      <motion.div 
+
+      <motion.div
         initial={{ opacity: 0, scale: 0.9, y: 20 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.9, y: 20 }}
@@ -34,7 +34,7 @@ const LogoutModal: React.FC<{ onConfirm: () => void; onCancel: () => void }> = (
         className="relative bg-[#0A0A0A] border border-white/10 rounded-[2.5rem] w-full max-w-[400px] p-10 shadow-[0_0_100px_rgba(0,0,0,0.8),0_0_40px_rgba(212,175,55,0.08)]"
       >
         <div className="absolute top-0 left-1/2 -translate-x-1/2 w-32 h-1 bg-gradient-to-r from-transparent via-red-500/50 to-transparent" />
-        
+
         {/* Sign Out Icon */}
         <div className="w-16 h-16 bg-red-500/10 border border-red-500/20 rounded-2xl flex items-center justify-center mb-8 mx-auto shadow-inner">
           <svg className="w-7 h-7 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -100,12 +100,19 @@ const Header: React.FC<HeaderProps> = () => {
   const handleLogoutConfirm = useCallback(() => {
     setShowLogoutModal(false);
     logout();
-  }, [logout]);
+    // Navigate to landing page via React Router — no full reload
+    routerNavigate('/', { replace: true });
+  }, [logout, routerNavigate]);
 
   const menuItems = [
     { label: 'Profile', icon: '◉', path: '/dashboard/profile' },
     { label: 'Settings', icon: '⚙', path: '/dashboard/settings' },
   ];
+
+  const adminItems = user?.role === 'admin' ? [
+    { label: 'Admin Panel', icon: '◈', path: '/dashboard/admin' },
+    { label: 'Manage Users', icon: '◎', path: '/dashboard/admin' },
+  ] : [];
 
   const initials = user?.name?.charAt(0).toUpperCase() || 'U';
 
@@ -291,6 +298,44 @@ const Header: React.FC<HeaderProps> = () => {
                     ))}
 
                     <div style={{ height: '1px', background: 'rgba(255,255,255,0.05)', margin: '4px 2px' }} />
+
+                    {/* Admin section — only visible to admins */}
+                    {adminItems.length > 0 && (
+                      <>
+                        <div style={{
+                          padding: '8px 12px 4px',
+                          fontSize: '0.65rem', fontWeight: 700,
+                          color: '#D4AF37', textTransform: 'uppercase', letterSpacing: '0.12em',
+                        }}>
+                          Admin
+                        </div>
+                        {adminItems.map(item => (
+                          <button
+                            key={item.label}
+                            onClick={() => navigate(item.path)}
+                            style={{
+                              width: '100%', display: 'flex', alignItems: 'center', gap: '10px',
+                              padding: '9px 12px', borderRadius: '8px',
+                              background: 'transparent', border: 'none',
+                              color: '#D4AF37', fontSize: '0.85rem', cursor: 'pointer',
+                              transition: 'all 0.15s ease', textAlign: 'left', opacity: 0.85,
+                            }}
+                            onMouseEnter={e => {
+                              (e.currentTarget as HTMLElement).style.background = 'rgba(212,175,55,0.1)';
+                              (e.currentTarget as HTMLElement).style.opacity = '1';
+                            }}
+                            onMouseLeave={e => {
+                              (e.currentTarget as HTMLElement).style.background = 'transparent';
+                              (e.currentTarget as HTMLElement).style.opacity = '0.85';
+                            }}
+                          >
+                            <span style={{ fontSize: '0.9rem', width: '16px', textAlign: 'center' }}>{item.icon}</span>
+                            {item.label}
+                          </button>
+                        ))}
+                        <div style={{ height: '1px', background: 'rgba(255,255,255,0.05)', margin: '4px 2px' }} />
+                      </>
+                    )}
 
                     {/* Logout */}
                     <button

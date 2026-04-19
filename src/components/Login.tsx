@@ -3,6 +3,7 @@ import { useGoogleLogin } from '@react-oauth/google';
 import { useAuth } from '../contexts/AuthContext';
 import { databaseAPI } from '../api/database';
 import { API_BASE } from '../api/config';
+import { consumeDeactivationMessage } from '../api/fetchWithAuth';
 import ParticleBackground from './ParticleBackground';
 
 interface LoginProps {
@@ -39,8 +40,13 @@ const Login: React.FC<LoginProps> = ({ onLogin, onBack }) => {
   const [loadingText, setLoadingText] = useState('Signing in...');
   const [error, setError] = useState('');
   const [serverDown, setServerDown] = useState(false);
+  const [deactivatedMsg, setDeactivatedMsg] = useState<string | null>(null);
 
   useEffect(() => {
+    // Show deactivation message if redirected here after account deletion
+    const msg = consumeDeactivationMessage();
+    if (msg) setDeactivatedMsg(msg);
+
     fetch(`${API_BASE}/api/health`)
       .then(r => { if (!r.ok) setServerDown(true); })
       .catch(() => setServerDown(true));
@@ -205,6 +211,16 @@ const Login: React.FC<LoginProps> = ({ onLogin, onBack }) => {
             </div>
 
             <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              {deactivatedMsg && (
+                <div style={{
+                  background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.25)',
+                  color: '#f87171', padding: '10px 14px', borderRadius: '10px', fontSize: '0.8rem',
+                  display: 'flex', alignItems: 'flex-start', gap: '8px',
+                }}>
+                  <span style={{ flexShrink: 0, marginTop: '1px' }}>🔒</span>
+                  <span>{deactivatedMsg}</span>
+                </div>
+              )}
               {serverDown && (
                 <div style={{
                   background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)',

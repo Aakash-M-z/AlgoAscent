@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import ParticleBackground from './ParticleBackground';
 
 interface Props {
@@ -8,16 +8,16 @@ interface Props {
 
 const IntroScreen: React.FC<Props> = ({ onDone, duration = 2600 }) => {
     const [phase, setPhase] = useState<'in' | 'hold' | 'out'>('in');
+    // Use ref so the effect never needs onDone in deps (prevents double-fire)
+    const onDoneRef = useRef(onDone);
+    onDoneRef.current = onDone;
 
     useEffect(() => {
-        // in → hold after 600ms
         const t1 = setTimeout(() => setPhase('hold'), 600);
-        // hold → out after duration
         const t2 = setTimeout(() => setPhase('out'), duration);
-        // unmount after fade-out completes (600ms)
-        const t3 = setTimeout(() => onDone(), duration + 600);
+        const t3 = setTimeout(() => onDoneRef.current(), duration + 600);
         return () => { clearTimeout(t1); clearTimeout(t2); clearTimeout(t3); };
-    }, []);
+    }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
     return (
         <div style={{
