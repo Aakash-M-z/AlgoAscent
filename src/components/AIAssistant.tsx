@@ -4,6 +4,7 @@ import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { Copy, Check, Terminal, User as UserIcon, Bot } from 'lucide-react';
 import { Activity } from '../types';
+import { API_BASE } from '../api/config';
 
 interface Message {
     id: string;
@@ -234,10 +235,10 @@ const AIAssistant: React.FC<Props> = ({ activities, username }) => {
         setTyping(true);
 
         try {
-            const token = localStorage.getItem('pt_token'); 
+            const token = localStorage.getItem('pt_token');
             const headers: Record<string, string> = { 'Content-Type': 'application/json' };
             if (token) headers['Authorization'] = `Bearer ${token}`;
-            
+
             // Format history for context
             const history = messages
                 .filter(m => m.id !== '0') // Skip first welcome message
@@ -248,8 +249,7 @@ const AIAssistant: React.FC<Props> = ({ activities, username }) => {
             const s = analyzeActivities(activities);
             const userStats = { username, score: s.score, solved: s.solved, streak: s.streak, topCat: s.topCat };
 
-            const baseUrl = import.meta.env.VITE_API_URL || '/api';
-            const response = await fetch(`${baseUrl}/ai/chat`, {
+            const response = await fetch(`${API_BASE}/api/ai/chat`, {
                 method: 'POST',
                 headers,
                 body: JSON.stringify({ message: text, history, userStats })
@@ -258,18 +258,18 @@ const AIAssistant: React.FC<Props> = ({ activities, username }) => {
             if (!response.ok) {
                 if (response.status === 403) {
                     const data = await response.json();
-                    setMessages(m => [...m, { 
-                        id: Date.now().toString(), 
-                        role: 'ai', 
-                        text: `⚠️ **AI Limit Reached**\n\n${data.message || 'You have reached your free daily limit for AI queries. Please try again tomorrow or upgrade to premium for unlimited access.'}`, 
-                        ts: new Date() 
+                    setMessages(m => [...m, {
+                        id: Date.now().toString(),
+                        role: 'ai',
+                        text: `⚠️ **AI Limit Reached**\n\n${data.message || 'You have reached your free daily limit for AI queries. Please try again tomorrow or upgrade to premium for unlimited access.'}`,
+                        ts: new Date()
                     }]);
                     return;
                 }
                 throw new Error('API failed');
             }
             const data = await response.json();
-            
+
             if (data.reply) {
                 setMessages(m => [...m, { id: Date.now().toString(), role: 'ai', text: data.reply, ts: new Date() }]);
             } else {
@@ -363,11 +363,11 @@ const AIAssistant: React.FC<Props> = ({ activities, username }) => {
                             boxShadow: msg.role === 'user' ? '0 4px 20px rgba(0,0,0,0.3)' : '0 4px 20px rgba(212,175,55,0.05)',
                         }}>
                             <MarkdownContent text={msg.text} />
-                            <div style={{ 
-                                fontSize: '0.65rem', 
-                                color: '#444', 
-                                marginTop: '12px', 
-                                textAlign: 'right', 
+                            <div style={{
+                                fontSize: '0.65rem',
+                                color: '#444',
+                                marginTop: '12px',
+                                textAlign: 'right',
                                 borderTop: '1px solid rgba(255,255,255,0.05)',
                                 paddingTop: '6px'
                             }}>
