@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { motion, AnimatePresence } from 'framer-motion';
 import { adminApi } from '../api/adminApi';
+import SystemStatus from './SystemStatus';
 
 import UsersTable from '../features/admin/components/UsersTable';
 import AdvancedAnalytics from '../features/admin/components/AdvancedAnalytics';
@@ -29,7 +30,6 @@ const AdminPanel: React.FC = () => {
     const { user } = useAuth();
     const navigate = useNavigate();
     const { tab } = useParams<{ tab?: string }>();
-    const [isOffline, setIsOffline] = useState(false);
 
     // Derive active tab from URL param — default to 'analytics'
     const activeTab: AdminTab =
@@ -42,16 +42,6 @@ const AdminPanel: React.FC = () => {
         }
     }, [tab, navigate]);
 
-    useEffect(() => {
-        adminApi.getHealthDetails()
-            .then((data: any) => {
-                if (data.isFallback || data.dbStatus?.includes('Disconnected') || data.dbStatus?.includes('Fallback')) {
-                    setIsOffline(true);
-                }
-            })
-            .catch(() => setIsOffline(true));
-    }, []);
-
     if (!user || user.role !== 'admin') {
         return (
             <div className="p-8 text-center text-red-500 card-dark">
@@ -63,27 +53,8 @@ const AdminPanel: React.FC = () => {
     return (
         <div className="section-gap animate-fadeIn min-h-[80vh]">
 
-            {/* Offline banner */}
-            <AnimatePresence>
-                {isOffline && (
-                    <motion.div
-                        initial={{ height: 0, opacity: 0 }}
-                        animate={{ height: 'auto', opacity: 1 }}
-                        exit={{ height: 0, opacity: 0 }}
-                        className="bg-gold/10 border border-gold/20 rounded-2xl p-4 mb-8 flex items-center gap-4 overflow-hidden"
-                    >
-                        <div className="w-10 h-10 rounded-xl bg-gold/20 flex items-center justify-center flex-shrink-0">
-                            <span className="text-xl">⚠️</span>
-                        </div>
-                        <div className="flex-1">
-                            <h4 className="text-gold font-bold text-sm uppercase tracking-wider">Database Offline Mode</h4>
-                            <p className="text-white/40 text-xs mt-1">
-                                MongoDB is currently unavailable. Using localized fallback data. Real-time edits may be restricted.
-                            </p>
-                        </div>
-                    </motion.div>
-                )}
-            </AnimatePresence>
+            {/* System status — auto-refreshes every 60s, hides when all good */}
+            <SystemStatus hideWhenOnline={false} refreshInterval={60_000} />
 
             {/* Header */}
             <div className="flex justify-between items-end border-b border-white/[0.08] pb-6 mb-8">
@@ -97,13 +68,7 @@ const AdminPanel: React.FC = () => {
                     </p>
                 </div>
                 <div className="hidden md:flex gap-3">
-                    <span className={`border px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-2 ${isOffline
-                            ? 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20'
-                            : 'bg-green-500/10 text-green-500 border-green-500/20'
-                        }`}>
-                        <span className={`w-2 h-2 rounded-full ${isOffline ? 'bg-yellow-500' : 'bg-green-500 animate-pulse'}`} />
-                        {isOffline ? 'PARTIAL SERVICES ACTIVE' : 'ALL SYSTEMS OPERATIONAL'}
-                    </span>
+                    <SystemStatus hideWhenOnline={false} refreshInterval={60_000} />
                 </div>
             </div>
 
@@ -114,8 +79,8 @@ const AdminPanel: React.FC = () => {
                         key={t.id}
                         onClick={() => navigate(`/dashboard/admin/${t.id}`)}
                         className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-semibold text-sm transition-all whitespace-nowrap ${activeTab === t.id
-                                ? 'bg-gradient-to-br from-[#D4AF37] to-[#AA8A2A] text-black shadow-lg shadow-[#D4AF37]/20 -translate-y-0.5'
-                                : 'bg-white/5 text-gray-400 hover:bg-white/10 hover:text-white border border-white/5'
+                            ? 'bg-gradient-to-br from-[#D4AF37] to-[#AA8A2A] text-black shadow-lg shadow-[#D4AF37]/20 -translate-y-0.5'
+                            : 'bg-white/5 text-gray-400 hover:bg-white/10 hover:text-white border border-white/5'
                             }`}
                     >
                         <span>{t.icon}</span> {t.label}

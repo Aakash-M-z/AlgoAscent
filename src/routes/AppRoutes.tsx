@@ -24,15 +24,17 @@ const LandingPage = React.lazy(() => import('../features/landing/LandingPage'));
 import TaskManager from '../components/TaskManager';
 import AnalyticsDashboard from '../components/AnalyticsDashboard';
 import DSARoadmap from '../components/DSARoadmap';
-import CoreSubjects from '../components/CoreSubjects';
 import ProgressStats from '../components/ProgressStats';
 import BadgeSystem from '../components/BadgeSystem';
 import XPSystem from '../components/XPSystem';
 import SolutionResources from '../components/SolutionResources';
 import UserProfile from '../components/UserProfile';
 import Settings from '../components/Settings';
-import AdminPanel from '../components/AdminPanel';
 import RoleBasedRoute from '../components/RoleBasedRoute';
+
+// Heavy components — lazy loaded to reduce initial bundle size
+const AdminPanel = React.lazy(() => import('../components/AdminPanel'));
+const CoreSubjects = React.lazy(() => import('../components/CoreSubjects'));
 
 export interface AppRoutesProps {
   overviewTabNode: React.ReactNode;
