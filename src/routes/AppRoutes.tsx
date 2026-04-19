@@ -59,25 +59,25 @@ const PageTransition = ({ children }: { children: React.ReactNode }) => {
 const PageLoader = () => (
   <div className="flex flex-col gap-8 animate-pulse p-2 md:p-6 opacity-60">
     <div className="flex items-center justify-between">
-        <div className="h-10 bg-white/10 rounded-xl w-48 shadow-[inset_0_0_10px_rgba(255,255,255,0.02)]"></div>
-        <div className="h-10 bg-white/10 rounded-xl w-10"></div>
+      <div className="h-10 bg-white/10 rounded-xl w-48 shadow-[inset_0_0_10px_rgba(255,255,255,0.02)]"></div>
+      <div className="h-10 bg-white/10 rounded-xl w-10"></div>
     </div>
-    
+
     <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
       {[...Array(4)].map((_, i) => (
         <div key={i} className="h-32 bg-white/5 border border-white/5 rounded-2xl relative overflow-hidden">
-           <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/5 to-transparent -translate-x-full animate-[shimmer_2s_infinite]" />
+          <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/5 to-transparent -translate-x-full animate-[shimmer_2s_infinite]" />
         </div>
       ))}
     </div>
 
     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="col-span-2 h-[400px] bg-white/5 border border-white/5 rounded-3xl relative overflow-hidden">
-             <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/5 to-transparent -translate-x-full animate-[shimmer_2s_infinite]" />
-        </div>
-        <div className="h-[400px] bg-white/5 border border-white/5 rounded-3xl relative overflow-hidden">
-             <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/5 to-transparent -translate-x-full animate-[shimmer_2s_infinite]" />
-        </div>
+      <div className="col-span-2 h-[400px] bg-white/5 border border-white/5 rounded-3xl relative overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/5 to-transparent -translate-x-full animate-[shimmer_2s_infinite]" />
+      </div>
+      <div className="h-[400px] bg-white/5 border border-white/5 rounded-3xl relative overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/5 to-transparent -translate-x-full animate-[shimmer_2s_infinite]" />
+      </div>
     </div>
 
     <style>{`
@@ -204,6 +204,17 @@ const AppRoutes: React.FC<AppRoutesProps> = ({ overviewTabNode, aiTabNode, activ
           </Suspense>
         } />
         <Route path="/dashboard/admin" element={
+          <Suspense fallback={<PageLoader />}>
+            <AdminPage>
+              <PageTransition>
+                <RoleBasedRoute requiredRole="admin">
+                  <AdminPanel />
+                </RoleBasedRoute>
+              </PageTransition>
+            </AdminPage>
+          </Suspense>
+        } />
+        <Route path="/dashboard/admin/:tab" element={
           <Suspense fallback={<PageLoader />}>
             <AdminPage>
               <PageTransition>

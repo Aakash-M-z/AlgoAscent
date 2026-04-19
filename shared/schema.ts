@@ -8,8 +8,9 @@ export interface User {
   learningGoal?: string;
   role: 'admin' | 'user';
   plan: 'free' | 'premium';
-  aiUsageCount: number;       // resets daily
-  aiUsageResetAt: string;     // ISO date string of last reset
+  isActive: boolean;          // false = deactivated/deleted, blocks all API access
+  aiUsageCount: number;
+  aiUsageResetAt: string;
   createdAt: Date;
 }
 
@@ -91,16 +92,16 @@ export interface InterviewSession {
   question: string;
   userAnswer: string;
   score: {
-     correctness: number;
-     optimization: number;
-     clarity: number;
-     overallScore: number;
+    correctness: number;
+    optimization: number;
+    clarity: number;
+    overallScore: number;
   };
   feedback: {
-     strengths: string[];
-     weaknesses: string[];
-     improvements: string[];
-     idealAnswer: string;
+    strengths: string[];
+    weaknesses: string[];
+    improvements: string[];
+    idealAnswer: string;
   };
   createdAt: Date;
 }

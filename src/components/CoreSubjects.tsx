@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Brain, BookOpen, Network, Cpu, ChevronDown, ChevronRight, CheckCircle, Circle, FileText, RotateCcw, Sparkles, X, Lock, RefreshCw } from 'lucide-react';
+import { Brain, BookOpen, Network, Cpu, ChevronDown, ChevronRight, CheckCircle, Circle, FileText, RotateCcw, Sparkles, X, Lock, RefreshCw, MessageCircle } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { usePlan } from '../hooks/usePlan';
 import { databaseAPI } from '../api/database';
@@ -10,6 +10,7 @@ import {
     trackRequest, trackCacheHit, trackSuccess, trackFailure,
     buildExplainCacheKey,
 } from '../utils/aiCache';
+import AIChatPanel from './AIChatPanel';
 
 /* ── Types ─────────────────────────────────────────────────── */
 export interface SubjectTopic {
@@ -121,6 +122,7 @@ const AIExplainModal: React.FC<{ topic: SubjectTopic; subject: Subject; onClose:
     const [limitReached, setLimitReached] = useState(!canUseAI);
     const [fromCache, setFromCache] = useState(() => !!getCached<string>('explain', cacheKey));
     const [cacheAge] = useState(() => getCacheInfo('explain', cacheKey)?.age ?? null);
+    const [showChat, setShowChat] = useState(false);
     const inFlight = React.useRef(false);
 
     // Map backend error codes to user-friendly messages
@@ -204,79 +206,143 @@ const AIExplainModal: React.FC<{ topic: SubjectTopic; subject: Subject; onClose:
     return (
         <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 200, background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
             <motion.div onClick={e => e.stopPropagation()} initial={{ opacity: 0, scale: 0.92, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95 }} transition={{ type: 'spring', stiffness: 350, damping: 28 }}
-                style={{ background: '#111', border: '1px solid rgba(212,175,55,0.3)', borderRadius: '20px', padding: '28px', width: '100%', maxWidth: '680px', maxHeight: '80vh', overflow: 'hidden', display: 'flex', flexDirection: 'column', boxShadow: '0 32px 80px rgba(0,0,0,0.8), 0 0 40px rgba(212,175,55,0.08)' }}>
+                style={{
+                    background: '#111', border: '1px solid rgba(212,175,55,0.3)', borderRadius: '20px',
+                    width: '100%',
+                    maxWidth: showChat ? '1100px' : '680px',
+                    maxHeight: '85vh', overflow: 'hidden',
+                    display: 'flex', flexDirection: 'row',
+                    boxShadow: '0 32px 80px rgba(0,0,0,0.8), 0 0 40px rgba(212,175,55,0.08)',
+                    transition: 'max-width 0.3s cubic-bezier(0.4,0,0.2,1)',
+                }}>
 
-                {/* Header */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px', flexShrink: 0 }}>
-                    <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: subject.bg, border: `1px solid ${subject.color}30`, display: 'flex', alignItems: 'center', justifyContent: 'center', color: subject.color }}><Sparkles size={16} /></div>
-                    <div style={{ flex: 1 }}>
-                        <div style={{ fontSize: '0.7rem', color: subject.color, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em' }}>{subject.name}</div>
-                        <div style={{ fontSize: '1rem', fontWeight: 700, color: '#EAEAEA' }}>{topic.title}</div>
-                    </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        {fromCache && cacheAge !== null && (
-                            <button onClick={handleForceRefresh} disabled={loading} title="Refresh from AI" style={{ display: 'flex', alignItems: 'center', gap: '4px', background: 'rgba(212,175,55,0.06)', border: '1px solid rgba(212,175,55,0.15)', borderRadius: '7px', padding: '4px 8px', color: '#D4AF37', cursor: loading ? 'not-allowed' : 'pointer', fontSize: '0.68rem', opacity: loading ? 0.5 : 1 }}>
-                                <RefreshCw size={10} /> {fmtAge(cacheAge)}
-                            </button>
-                        )}
-                        <button onClick={onClose} style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '8px', padding: '6px 10px', color: '#555', cursor: 'pointer', transition: 'color 0.2s' }} onMouseEnter={e => (e.currentTarget as HTMLElement).style.color = '#ef4444'} onMouseLeave={e => (e.currentTarget as HTMLElement).style.color = '#555'}><X size={14} /></button>
-                    </div>
-                </div>
+                {/* ── Left pane: explanation ── */}
+                <div style={{ flex: 1, minWidth: 0, padding: '28px', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
 
-                <div style={{ flex: 1, overflowY: 'auto' }}>
-                    {/* Limit reached */}
-                    {limitReached && (
-                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '32px 20px', gap: '12px', textAlign: 'center' }}>
-                            <div style={{ width: '48px', height: '48px', borderRadius: '14px', background: 'rgba(212,175,55,0.1)', border: '1px solid rgba(212,175,55,0.25)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                <Lock size={20} color="#D4AF37" />
-                            </div>
-                            <div style={{ fontSize: '0.95rem', fontWeight: 700, color: '#EAEAEA' }}>Daily AI limit reached</div>
-                            <div style={{ fontSize: '0.8rem', color: '#555', lineHeight: 1.6 }}>Free plan allows 2 AI requests/day. Resets at midnight.</div>
-                            <div style={{ padding: '8px 18px', borderRadius: '10px', background: 'rgba(212,175,55,0.08)', border: '1px solid rgba(212,175,55,0.2)', fontSize: '0.78rem', color: '#D4AF37', fontWeight: 600 }}>👑 Upgrade to Premium for unlimited AI</div>
+                    {/* Header */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px', flexShrink: 0 }}>
+                        <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: subject.bg, border: `1px solid ${subject.color}30`, display: 'flex', alignItems: 'center', justifyContent: 'center', color: subject.color }}><Sparkles size={16} /></div>
+                        <div style={{ flex: 1 }}>
+                            <div style={{ fontSize: '0.7rem', color: subject.color, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em' }}>{subject.name}</div>
+                            <div style={{ fontSize: '1rem', fontWeight: 700, color: '#EAEAEA' }}>{topic.title}</div>
                         </div>
-                    )}
-
-                    {/* Loading skeleton */}
-                    <AnimatePresence>
-                        {!limitReached && loading && <ExplainSkeleton />}
-                    </AnimatePresence>
-
-                    {/* Error / fallback banner */}
-                    {!limitReached && !loading && error && (
-                        <div style={{ padding: '12px 16px', borderRadius: '12px', background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.2)', color: '#f59e0b', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '10px', marginBottom: isFallback ? '16px' : 0 }}>
-                            <span style={{ flex: 1 }}>{error}</span>
-                            <button
-                                onClick={() => explain(true)}
-                                disabled={loading}
-                                style={{ color: '#D4AF37', background: 'none', border: 'none', cursor: loading ? 'not-allowed' : 'pointer', fontWeight: 600, fontSize: '0.85rem', flexShrink: 0, opacity: loading ? 0.5 : 1 }}
-                            >Retry</button>
-                        </div>
-                    )}
-
-                    {/* Explanation */}
-                    {!limitReached && !loading && explanation && (
-                        <div style={{ fontSize: '0.9rem', color: '#BDBDBD', lineHeight: 1.75, whiteSpace: 'pre-wrap' }}>{explanation}</div>
-                    )}
-
-                    {/* Key points + interview Qs — always shown; more prominent on fallback */}
-                    {!loading && !limitReached && (
-                        <div style={{ marginTop: explanation ? '24px' : '4px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                            {isFallback && (
-                                <div style={{ padding: '4px 0 8px', fontSize: '0.75rem', color: '#555', fontStyle: 'italic' }}>
-                                    Showing offline reference material while AI is unavailable.
-                                </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            {fromCache && cacheAge !== null && (
+                                <button onClick={handleForceRefresh} disabled={loading} title="Refresh from AI" style={{ display: 'flex', alignItems: 'center', gap: '4px', background: 'rgba(212,175,55,0.06)', border: '1px solid rgba(212,175,55,0.15)', borderRadius: '7px', padding: '4px 8px', color: '#D4AF37', cursor: loading ? 'not-allowed' : 'pointer', fontSize: '0.68rem', opacity: loading ? 0.5 : 1 }}>
+                                    <RefreshCw size={10} /> {fmtAge(cacheAge)}
+                                </button>
                             )}
-                            <div style={{ padding: '16px', borderRadius: '12px', background: isFallback ? 'rgba(212,175,55,0.08)' : 'rgba(212,175,55,0.05)', border: `1px solid rgba(212,175,55,${isFallback ? '0.25' : '0.15'})` }}>
-                                <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#D4AF37', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '10px' }}>Key Points</div>
-                                {topic.keyPoints.map((p, i) => <div key={i} style={{ fontSize: '0.82rem', color: isFallback ? '#BDBDBD' : '#999', marginBottom: '6px', paddingLeft: '12px', borderLeft: '2px solid rgba(212,175,55,0.3)' }}>{p}</div>)}
-                            </div>
-                            <div style={{ padding: '16px', borderRadius: '12px', background: 'rgba(167,139,250,0.05)', border: '1px solid rgba(167,139,250,0.15)' }}>
-                                <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#a78bfa', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '10px' }}>Interview Questions</div>
-                                {topic.interviewQuestions.map((q, i) => <div key={i} style={{ fontSize: '0.82rem', color: '#999', marginBottom: '6px', display: 'flex', gap: '8px' }}><span style={{ color: '#a78bfa', flexShrink: 0 }}>Q{i + 1}.</span>{q}</div>)}
-                            </div>
+                            {/* Ask Follow-up button — only when explanation is loaded */}
+                            {!limitReached && (explanation || isFallback) && (
+                                <button
+                                    onClick={() => setShowChat(c => !c)}
+                                    style={{
+                                        display: 'flex', alignItems: 'center', gap: '5px',
+                                        padding: '5px 10px', borderRadius: '8px', cursor: 'pointer',
+                                        background: showChat ? subject.bg : 'rgba(255,255,255,0.04)',
+                                        border: `1px solid ${showChat ? subject.color + '50' : 'rgba(255,255,255,0.08)'}`,
+                                        color: showChat ? subject.color : '#888',
+                                        fontSize: '0.72rem', fontWeight: 600,
+                                        transition: 'all 0.2s',
+                                    }}
+                                    onMouseEnter={e => { if (!showChat) { (e.currentTarget as HTMLElement).style.color = subject.color; (e.currentTarget as HTMLElement).style.borderColor = subject.color + '40'; } }}
+                                    onMouseLeave={e => { if (!showChat) { (e.currentTarget as HTMLElement).style.color = '#888'; (e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,255,255,0.08)'; } }}
+                                >
+                                    <MessageCircle size={12} />
+                                    {showChat ? 'Hide Chat' : 'Ask Follow-up'}
+                                </button>
+                            )}
+                            <button onClick={onClose} style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '8px', padding: '6px 10px', color: '#555', cursor: 'pointer', transition: 'color 0.2s' }} onMouseEnter={e => (e.currentTarget as HTMLElement).style.color = '#ef4444'} onMouseLeave={e => (e.currentTarget as HTMLElement).style.color = '#555'}><X size={14} /></button>
                         </div>
+                    </div>
+
+                    <div style={{ flex: 1, overflowY: 'auto' }}>
+                        {/* Limit reached */}
+                        {limitReached && (
+                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '32px 20px', gap: '12px', textAlign: 'center' }}>
+                                <div style={{ width: '48px', height: '48px', borderRadius: '14px', background: 'rgba(212,175,55,0.1)', border: '1px solid rgba(212,175,55,0.25)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                    <Lock size={20} color="#D4AF37" />
+                                </div>
+                                <div style={{ fontSize: '0.95rem', fontWeight: 700, color: '#EAEAEA' }}>Daily AI limit reached</div>
+                                <div style={{ fontSize: '0.8rem', color: '#555', lineHeight: 1.6 }}>Free plan allows 2 AI requests/day. Resets at midnight.</div>
+                                <div style={{ padding: '8px 18px', borderRadius: '10px', background: 'rgba(212,175,55,0.08)', border: '1px solid rgba(212,175,55,0.2)', fontSize: '0.78rem', color: '#D4AF37', fontWeight: 600 }}>👑 Upgrade to Premium for unlimited AI</div>
+                            </div>
+                        )}
+
+                        {/* Loading skeleton */}
+                        <AnimatePresence>
+                            {!limitReached && loading && <ExplainSkeleton />}
+                        </AnimatePresence>
+
+                        {/* Error / fallback banner */}
+                        {!limitReached && !loading && error && (
+                            <div style={{ padding: '12px 16px', borderRadius: '12px', background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.2)', color: '#f59e0b', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '10px', marginBottom: isFallback ? '16px' : 0 }}>
+                                <span style={{ flex: 1 }}>{error}</span>
+                                <button
+                                    onClick={() => explain(true)}
+                                    disabled={loading}
+                                    style={{ color: '#D4AF37', background: 'none', border: 'none', cursor: loading ? 'not-allowed' : 'pointer', fontWeight: 600, fontSize: '0.85rem', flexShrink: 0, opacity: loading ? 0.5 : 1 }}
+                                >Retry</button>
+                            </div>
+                        )}
+
+                        {/* Explanation */}
+                        {!limitReached && !loading && explanation && (
+                            <div style={{ fontSize: '0.9rem', color: '#BDBDBD', lineHeight: 1.75, whiteSpace: 'pre-wrap' }}>{explanation}</div>
+                        )}
+
+                        {/* Key points + interview Qs — always shown; more prominent on fallback */}
+                        {!loading && !limitReached && (
+                            <div style={{ marginTop: explanation ? '24px' : '4px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                                {isFallback && (
+                                    <div style={{ padding: '4px 0 8px', fontSize: '0.75rem', color: '#555', fontStyle: 'italic' }}>
+                                        Showing offline reference material while AI is unavailable.
+                                    </div>
+                                )}
+                                <div style={{ padding: '16px', borderRadius: '12px', background: isFallback ? 'rgba(212,175,55,0.08)' : 'rgba(212,175,55,0.05)', border: `1px solid rgba(212,175,55,${isFallback ? '0.25' : '0.15'})` }}>
+                                    <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#D4AF37', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '10px' }}>Key Points</div>
+                                    {topic.keyPoints.map((p, i) => <div key={i} style={{ fontSize: '0.82rem', color: isFallback ? '#BDBDBD' : '#999', marginBottom: '6px', paddingLeft: '12px', borderLeft: '2px solid rgba(212,175,55,0.3)' }}>{p}</div>)}
+                                </div>
+                                <div style={{ padding: '16px', borderRadius: '12px', background: 'rgba(167,139,250,0.05)', border: '1px solid rgba(167,139,250,0.15)' }}>
+                                    <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#a78bfa', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '10px' }}>Interview Questions</div>
+                                    {topic.interviewQuestions.map((q, i) => <div key={i} style={{ fontSize: '0.82rem', color: '#999', marginBottom: '6px', display: 'flex', gap: '8px' }}><span style={{ color: '#a78bfa', flexShrink: 0 }}>Q{i + 1}.</span>{q}</div>)}
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                </div>{/* end left pane */}
+
+                {/* ── Right pane: chat ── */}
+                <AnimatePresence>
+                    {showChat && (
+                        <motion.div
+                            initial={{ width: 0, opacity: 0 }}
+                            animate={{ width: '360px', opacity: 1 }}
+                            exit={{ width: 0, opacity: 0 }}
+                            transition={{ duration: 0.28, ease: [0.4, 0, 0.2, 1] }}
+                            style={{
+                                flexShrink: 0, overflow: 'hidden',
+                                borderLeft: '1px solid rgba(255,255,255,0.06)',
+                                background: '#0d0d0d',
+                                borderRadius: '0 20px 20px 0',
+                            }}
+                        >
+                            <div style={{ width: '360px', height: '100%', display: 'flex', flexDirection: 'column' }}>
+                                <AIChatPanel
+                                    context={{
+                                        title: topic.title,
+                                        explanation: explanation,
+                                        keyPoints: topic.keyPoints,
+                                    }}
+                                    accentColor={subject.color}
+                                    accentBg={subject.bg}
+                                    onClose={() => setShowChat(false)}
+                                />
+                            </div>
+                        </motion.div>
                     )}
-                </div>
+                </AnimatePresence>
+
             </motion.div>
         </div>
     );

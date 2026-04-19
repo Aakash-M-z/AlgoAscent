@@ -9,6 +9,7 @@ const userSchema = new Schema({
     learningGoal: { type: String },
     role: { type: String, default: 'user', required: true },
     plan: { type: String, default: 'free', required: true },
+    isActive: { type: Boolean, default: true, index: true },  // false = deactivated
     aiUsageCount: { type: Number, default: 0 },
     aiUsageResetAt: { type: String, default: () => new Date().toISOString().slice(0, 10) },
     createdAt: { type: Date, default: Date.now }
@@ -76,6 +77,14 @@ const notificationSchema = new Schema({
 export const FeatureFlagModel = mongoose.model('FeatureFlag', featureFlagSchema);
 export const NotificationModel = mongoose.model('Notification', notificationSchema);
 
+// ── Password Reset Token ──────────────────────────────────────────────────────
+const passwordResetTokenSchema = new Schema({
+    email: { type: String, required: true, index: true },
+    token: { type: String, required: true },          // SHA-256 hash of raw token
+    expiresAt: { type: Date, required: true, index: { expireAfterSeconds: 0 } }, // MongoDB TTL auto-deletes
+});
+export const PasswordResetTokenModel = mongoose.model('PasswordResetToken', passwordResetTokenSchema);
+
 const interviewSessionSchema = new Schema({
     userId: { type: String, required: true },
     type: { type: String, required: true },
@@ -102,3 +111,22 @@ const interviewSessionSchema = new Schema({
 });
 
 export const InterviewSessionModel = mongoose.model('InterviewSession', interviewSessionSchema);
+
+// ── Problem (LeetCode dataset) ────────────────────────────────────────────────
+const problemSchema = new Schema({
+    leetcodeId: { type: Number, required: true, unique: true, index: true },
+    title: { type: String, required: true },
+    slug: { type: String, required: true, unique: true, index: true },
+    difficulty: { type: String, enum: ['easy', 'medium', 'hard'], required: true, index: true },
+    topic: { type: String, required: true, index: true },
+    description: { type: String, default: '' },
+    examples: [{ type: String }],
+    constraints: { type: String, default: '' },
+    testCases: [{ input: String, output: String }],
+    tags: [{ type: String, index: true }],
+    acceptanceRate: { type: Number },
+    isPremium: { type: Boolean, default: false },
+    url: { type: String },
+    createdAt: { type: Date, default: Date.now },
+});
+export const ProblemModel = mongoose.model('Problem', problemSchema);

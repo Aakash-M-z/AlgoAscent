@@ -1,11 +1,45 @@
 import { Router, Request, Response } from 'express';
 import mongoose from 'mongoose';
+import bcrypt from 'bcryptjs';
+import { z } from 'zod';
 import {
     UserModel, ActivityModel, AdminLogModel, TaskModel,
     FeatureFlagModel, NotificationModel, InterviewSessionModel
 } from './models.js';
+import { sendWelcomeEmail } from './email.js';
 
 const router = Router();
+
+// ── Zod schemas ───────────────────────────────────────────────────────────────
+const CreateUserSchema = z.object({
+    username: z.string().min(2).max(32).regex(/^[a-zA-Z0-9_]+$/, 'Only letters, numbers, underscores'),
+    email: z.string().email().max(255).transform(s => s.trim().toLowerCase()),
+    password: z.string().min(8).max(128).optional(),
+    role: z.enum(['admin', 'user']).default('user'),
+    plan: z.enum(['free', 'premium']).default('free'),
+    sendWelcome: z.boolean().default(false),
+});
+
+const UpdateUserSchema = z.object({
+    role: z.enum(['admin', 'user']).optional(),
+    plan: z.enum(['free', 'premium']).optional(),
+}).refine(d => d.role !== undefined || d.plan !== undefined, {
+    message: 'At least one of role or plan must be provided',
+});
+
+// ── Helper: log admin action ──────────────────────────────────────────────────
+async function logAction(req: Request, action: string, targetId: string, targetEmail: string, detail: string) {
+    const admin = (req as any).adminUser;
+    await AdminLogModel.create({
+        adminId: admin?.id ?? 'system',
+        adminEmail: admin?.email ?? 'system',
+        action,
+        targetId,
+        targetEmail,
+        detail,
+    }).catch(err => console.error('[adminLog] Failed to write log:', err?.message));
+}
+
 
 // ── Middleware: MongoDB Status Checker ─────────────────────
 // Instead of 503, we flag the request so routes can provide fallback data
@@ -17,13 +51,149 @@ router.use((req, res, next) => {
     next();
 });
 
+// ═════════════════════════════════════════════════════════════════════════════
+// USER MANAGEMENT
+// ═════════════════════════════════════════════════════════════════════════════
+
+// ── GET /admin/users — list all users ────────────────────────────────────────
+router.get('/users', async (req: Request, res: Response) => {
+    if (!(req as any).dbConnected) {
+        return res.status(503).json({ error: 'Database unavailable' });
+    }
+    try {
+        // Return all users including deactivated — pass ?active=true to filter active only
+        const activeOnly = req.query.active === 'true';
+        const filter = activeOnly ? { isActive: { $ne: false } } : {};
+        const users = await UserModel.find(filter, { password: 0 }).sort({ createdAt: -1 }).lean();
+        res.set('Cache-Control', 'no-store');
+        res.json(users);
+    } catch (err: any) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ── POST /admin/users — create user ──────────────────────────────────────────
+router.post('/users', async (req: Request, res: Response) => {
+    if (!(req as any).dbConnected) {
+        return res.status(503).json({ error: 'Database unavailable' });
+    }
+
+    const parsed = CreateUserSchema.safeParse(req.body);
+    if (!parsed.success) {
+        return res.status(400).json({ error: 'Validation failed', details: parsed.error.flatten() });
+    }
+
+    const { username, email, password, role, plan, sendWelcome } = parsed.data;
+
+    try {
+        // Duplicate checks
+        const [emailExists, usernameExists] = await Promise.all([
+            UserModel.exists({ email }),
+            UserModel.exists({ username }),
+        ]);
+        if (emailExists) return res.status(409).json({ error: 'An account with this email already exists' });
+        if (usernameExists) return res.status(409).json({ error: 'This username is already taken' });
+
+        // Password: use provided or generate a secure temporary one
+        const rawPassword = password ?? (Math.random().toString(36).slice(-8) + Math.random().toString(36).slice(-8).toUpperCase() + '!');
+        const hashedPassword = await bcrypt.hash(rawPassword, 12);
+
+        const user = await UserModel.create({
+            username, email,
+            password: hashedPassword,
+            role, plan,
+            aiUsageCount: 0,
+            aiUsageResetAt: new Date().toISOString().slice(0, 10),
+        });
+
+        // Fire-and-forget welcome email
+        if (sendWelcome) {
+            sendWelcomeEmail(email, username).catch(err =>
+                console.error('[admin/createUser] Welcome email failed:', err?.message)
+            );
+        }
+
+        await logAction(req, 'CREATE_USER', String(user._id), email,
+            `Admin created user "${username}" with role=${role} plan=${plan}`);
+
+        const { password: _pw, ...safeUser } = user.toObject();
+        res.status(201).json(safeUser);
+    } catch (err: any) {
+        console.error('[admin/createUser]', err?.message);
+        res.status(500).json({ error: 'Failed to create user' });
+    }
+});
+
+// ── PATCH /admin/users/:id — update role and/or plan ─────────────────────────
+router.patch('/users/:id', async (req: Request, res: Response) => {
+    if (!(req as any).dbConnected) {
+        return res.status(503).json({ error: 'Database unavailable' });
+    }
+
+    const parsed = UpdateUserSchema.safeParse(req.body);
+    if (!parsed.success) {
+        return res.status(400).json({ error: 'Validation failed', details: parsed.error.flatten() });
+    }
+
+    try {
+        const user = await UserModel.findByIdAndUpdate(
+            req.params.id,
+            { $set: parsed.data },
+            { new: true, projection: { password: 0 } }
+        ).lean();
+
+        if (!user) return res.status(404).json({ error: 'User not found' });
+
+        await logAction(req, 'UPDATE_USER', String(req.params.id), (user as any).email,
+            `Updated: ${JSON.stringify(parsed.data)}`);
+
+        res.json(user);
+    } catch (err: any) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ── DELETE /admin/users/:id — soft delete (sets isActive = false) ─────────────
+router.delete('/users/:id', async (req: Request, res: Response) => {
+    if (!(req as any).dbConnected) {
+        return res.status(503).json({ error: 'Database unavailable' });
+    }
+    try {
+        const admin = (req as any).adminUser;
+        console.log(`[admin/delete] id=${String(req.params.id)} | adminId=${admin?.id}`);
+
+        // Prevent admin from deactivating themselves
+        if (req.params.id === admin?.id) {
+            return res.status(400).json({ error: 'You cannot deactivate your own account' });
+        }
+
+        const user = await UserModel.findByIdAndUpdate(
+            req.params.id,
+            { $set: { isActive: false } },
+            { new: true, projection: { password: 0 } }
+        ).lean();
+
+        console.log(`[admin/delete] result:`, user ? `found ${(user as any).username}` : 'NOT FOUND');
+
+        if (!user) return res.status(404).json({ error: 'User not found' });
+
+        await logAction(req, 'DEACTIVATE_USER', String(req.params.id), (user as any).email,
+            `Deactivated user "${(user as any).username}" — access revoked immediately`);
+
+        res.status(204).send();
+    } catch (err: any) {
+        console.error('[admin/delete] error:', err?.message);
+        res.status(500).json({ error: err.message });
+    }
+});
+
 // ── Mock Data Generators ──────────────────────────────────
 const getMockAnalytics = () => ({
-    kpis: { 
-        totalUsers: 1240, 
-        dau: 156, 
-        newUsersLast30: 84, 
-        retention: 68 
+    kpis: {
+        totalUsers: 1240,
+        dau: 156,
+        newUsersLast30: 84,
+        retention: 68
     },
     diffStats: [
         { difficulty: 'Easy', count: 450 },
@@ -117,16 +287,16 @@ router.get('/analytics', async (req, res) => {
         const thirtyDaysAgo = new Date();
         thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
         const newUsersLast30 = await UserModel.countDocuments({ createdAt: { $gte: thirtyDaysAgo } });
-        
+
         const todayStr = new Date().toISOString().slice(0, 10);
         const dauRows = await ActivityModel.distinct('userId', { date: { $regex: `^${todayStr}` } });
         const dau = dauRows.length;
-        
+
         const sevenDaysAgo = new Date();
         sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
         const activeRecent = await ActivityModel.distinct('userId', { createdAt: { $gte: sevenDaysAgo } });
         const olderUsersCount = await UserModel.countDocuments({ createdAt: { $lt: sevenDaysAgo } });
-        
+
         let retention = 0;
         if (olderUsersCount > 0) {
             retention = Math.round((activeRecent.length / olderUsersCount) * 100);
@@ -169,7 +339,7 @@ router.get('/ai-monitoring', async (req, res) => {
             .sort({ aiUsageCount: -1 })
             .limit(10);
 
-        res.json({ 
+        res.json({
             usageByPlan: usageData.map(d => ({ plan: d._id, total: d.totalAi, avg: Math.round(d.avgAi * 10) / 10 })),
             topUsers,
             isFallback: false
@@ -219,7 +389,7 @@ router.patch('/features/:key', async (req, res) => {
 // ── 4. System Health ──────────────────────────────────────
 router.get('/health-details', async (req, res) => {
     const dbStatus = (req as any).dbConnected ? 'Connected' : 'Disconnected (Fallback Mode)';
-    
+
     try {
         let latency = 0;
         if ((req as any).dbConnected) {
@@ -437,7 +607,7 @@ router.get('/interview-analytics', async (req, res) => {
             insights: [
                 `Users struggle most with ${mostFailedTopic}`,
                 `System competence level is currently at ${Math.round(stats[0]?.avgScore || 0)}%`,
-                `High engagement detected in ${topicStats.sort((a,b) => b.count - a.count)[0]?._id || 'N/A'}`
+                `High engagement detected in ${topicStats.sort((a, b) => b.count - a.count)[0]?._id || 'N/A'}`
             ],
             isFallback: false
         });

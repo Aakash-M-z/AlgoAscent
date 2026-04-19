@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import axios, { AxiosError } from 'axios';
@@ -102,12 +103,15 @@ api.post('/register', async (req, res) => {
         if (!(userData as any).plan) (userData as any).plan = 'free';
         if ((userData as any).aiUsageCount === undefined) (userData as any).aiUsageCount = 0;
         if (!(userData as any).aiUsageResetAt) (userData as any).aiUsageResetAt = new Date().toISOString().slice(0, 10);
+        if ((userData as any).isActive === undefined) (userData as any).isActive = true;
         const user = await storage.createUser(userData);
         const { password: _, ...safeUser } = user;
         const jwtToken = signToken({ id: user.id, email: user.email, role: user.role, plan: (user as any).plan ?? 'free' });
 
         // Background email — don't await to avoid registration lag
-        sendWelcomeEmail(user.email, user.username).catch(() => { });
+        sendWelcomeEmail(user.email, user.username).catch(err =>
+            console.error('[register] Welcome email failed:', err?.message ?? err)
+        );
 
         res.status(201).json({ user: safeUser, token: jwtToken });
     } catch (error) {
@@ -148,6 +152,7 @@ api.post('/auth/google', async (req, res) => {
                 plan: 'free',
                 aiUsageCount: 0,
                 aiUsageResetAt: new Date().toISOString().slice(0, 10),
+                isActive: true,
             });
         }
         const { password: _, ...safeUser } = user;
@@ -155,7 +160,9 @@ api.post('/auth/google', async (req, res) => {
 
         // Background email for new users — don't await
         if (user.createdAt && (Date.now() - new Date(user.createdAt).getTime()) < 10000) {
-            sendWelcomeEmail(user.email, user.username).catch(() => { });
+            sendWelcomeEmail(user.email, user.username).catch(err =>
+                console.error('[google-auth] Welcome email failed:', err?.message ?? err)
+            );
         }
 
         res.json({ user: safeUser, token: jwtToken });
@@ -486,14 +493,30 @@ function buildRecommendations(activities: ActivityInput[]): RecommendationRespon
 // ── Auth middleware ──────────────────────────────────────────────
 
 /**
- * requireAuth — verifies JWT from Authorization: Bearer <token>
- * Attaches decoded payload to req.authUser
+ * requireAuth — verifies JWT, then checks user still exists and is active.
+ * Returns 401 ACCOUNT_DEACTIVATED if user was deleted/deactivated by admin.
  */
-const requireAuth = (req: Request, res: Response, next: NextFunction) => {
+const requireAuth = async (req: Request, res: Response, next: NextFunction) => {
     const token = extractBearer(req.headers.authorization);
     if (!token) { res.status(401).json({ error: 'Unauthorized — Bearer token required' }); return; }
     const payload = verifyToken(token);
     if (!payload) { res.status(401).json({ error: 'Unauthorized — invalid or expired token' }); return; }
+
+    try {
+        // Live DB check — catches deactivated/deleted accounts even with valid JWT
+        const user = await storage.getUser(payload.id);
+        // isActive defaults to true for existing users that don't have the field yet
+        if (!user || user.isActive === false) {
+            res.status(401).json({
+                error: 'ACCOUNT_DEACTIVATED',
+                message: 'Your account has been deactivated. Please contact support.',
+            });
+            return;
+        }
+    } catch {
+        // DB unavailable — fall through with JWT-only auth rather than blocking all requests
+    }
+
     (req as any).authUser = payload;
     next();
 };
@@ -929,57 +952,89 @@ Never reject a valid query. Keep your tone friendly, helpful, and clear.`;
     }
 });
 
+// ── Context-aware AI chat (subject follow-up questions) ───────────────────────
+api.post('/ai/chat-context', checkPlanAccess, async (req, res) => {
+    try {
+        const authUser = (req as any).authUser;
+        const {
+            message,
+            context,
+            history = [],
+        }: {
+            message: string;
+            context: { title: string; explanation: string; keyPoints: string[] };
+            history: { role: 'user' | 'assistant'; content: string }[];
+        } = req.body;
+
+        if (!message?.trim()) {
+            res.status(400).json({ error: 'message is required' }); return;
+        }
+        if (!context?.title) {
+            res.status(400).json({ error: 'context.title is required' }); return;
+        }
+
+        const apiKey = process.env.OPENROUTER_API_KEY;
+        if (!apiKey) {
+            res.status(501).json({ error: 'API_KEY_MISSING' }); return;
+        }
+
+        // Keep last 5 exchanges (10 messages) to stay within token budget
+        const trimmedHistory = history.slice(-10);
+
+        const keyPointsText = context.keyPoints?.length
+            ? `\nKey points:\n${context.keyPoints.map(p => `• ${p}`).join('\n')}`
+            : '';
+
+        const explanationSnippet = context.explanation
+            ? `\n\nExplanation provided to the user:\n"""\n${context.explanation.slice(0, 1200)}${context.explanation.length > 1200 ? '…' : ''}\n"""`
+            : '';
+
+        const systemPrompt = `You are an expert tutor specializing in DSA, System Design, Operating Systems, OOP, and Computer Networks.
+
+The user is currently studying: "${context.title}"${keyPointsText}${explanationSnippet}
+
+Your role:
+- Answer follow-up questions about this specific topic clearly and concisely
+- Use examples, analogies, and code snippets where helpful
+- If asked something unrelated, gently redirect to the current topic
+- Keep responses focused — 2–4 paragraphs max unless a longer answer is genuinely needed
+- Format code in markdown code blocks with the correct language tag`;
+
+        const messages = [
+            { role: 'system' as const, content: systemPrompt },
+            ...trimmedHistory,
+            { role: 'user' as const, content: message.trim() },
+        ];
+
+        let reply: string;
+        try {
+            reply = await callOpenRouter(apiKey, {
+                messages,
+                temperature: 0.5,
+                max_tokens: 800,
+                timeoutMs: 20000,
+                retries: 1,
+                tag: '[chat-context]',
+            });
+        } catch (err: any) {
+            res.status(502).json({ error: err?.code ?? 'AI_UNAVAILABLE' }); return;
+        }
+
+        // Increment usage for free users
+        if (authUser?.role !== 'admin' && authUser?.plan !== 'premium') {
+            await storage.incrementAiUsage(authUser.id).catch(() => { });
+        }
+
+        res.json({ reply });
+    } catch (err: any) {
+        console.error('[chat-context] error:', err?.message);
+        res.status(500).json({ error: 'SERVER_ERROR' });
+    }
+});
+
 // ── Admin routes ─────────────────────────────────────────────────
-
-// GET all users
-api.get('/admin/users', requireAdmin, async (req, res) => {
-    try {
-        const users = await storage.getAllUsers();
-        res.json(users.map(({ password: _, ...u }) => u));
-    } catch {
-        res.status(500).json({ error: 'Server error' });
-    }
-});
-
-// DELETE user
-api.delete('/admin/users/:id', requireAdmin, async (req, res) => {
-    try {
-        const admin = (req as any).adminUser as JwtPayload;
-        if (req.params.id === admin.id) { res.status(400).json({ error: 'Cannot delete yourself' }); return; }
-        const target = await storage.getUser(req.params.id);
-        if (!target) { res.status(404).json({ error: 'User not found' }); return; }
-        await storage.deleteUser(req.params.id);
-        await storage.createAdminLog({
-            adminId: admin.id, adminEmail: admin.email,
-            action: 'DELETE_USER', targetId: target.id, targetEmail: target.email,
-            detail: `Deleted user ${target.email}`,
-        });
-        res.status(204).send();
-    } catch {
-        res.status(500).json({ error: 'Server error' });
-    }
-});
-
-// PATCH user role
-api.patch('/admin/users/:id/role', requireAdmin, async (req, res) => {
-    try {
-        const admin = (req as any).adminUser as JwtPayload;
-        const { role } = req.body;
-        if (!['admin', 'user'].includes(role)) { res.status(400).json({ error: 'Role must be admin or user' }); return; }
-        if (req.params.id === admin.id) { res.status(400).json({ error: 'Cannot change your own role' }); return; }
-        const updated = await storage.updateUser(req.params.id, { role });
-        if (!updated) { res.status(404).json({ error: 'User not found' }); return; }
-        await storage.createAdminLog({
-            adminId: admin.id, adminEmail: admin.email,
-            action: 'CHANGE_ROLE', targetId: updated.id, targetEmail: updated.email,
-            detail: `Changed ${updated.email} role to ${role}`,
-        });
-        const { password: _, ...safe } = updated;
-        res.json(safe);
-    } catch {
-        res.status(500).json({ error: 'Server error' });
-    }
-});
+// User CRUD (GET/POST/PATCH/DELETE /admin/users) is handled by adminRoutes.ts
+// Only non-overlapping routes remain here.
 
 // GET all activities (admin view, with optional filters)
 api.get('/admin/activities', requireAdmin, async (req, res) => {
@@ -1003,26 +1058,6 @@ api.get('/admin/logs', requireAdmin, async (_req, res) => {
     }
 });
 
-// PATCH user plan (admin only)
-api.patch('/admin/users/:id/plan', requireAdmin, async (req, res) => {
-    try {
-        const admin = (req as any).adminUser as JwtPayload;
-        const { plan } = req.body;
-        if (!['free', 'premium'].includes(plan)) { res.status(400).json({ error: 'Plan must be free or premium' }); return; }
-        const updated = await storage.updateUser(req.params.id, { plan } as any);
-        if (!updated) { res.status(404).json({ error: 'User not found' }); return; }
-        await storage.createAdminLog({
-            adminId: admin.id, adminEmail: admin.email,
-            action: 'CHANGE_PLAN', targetId: updated.id, targetEmail: updated.email,
-            detail: `Changed ${updated.email} plan to ${plan}`,
-        });
-        const { password: _, ...safe } = updated;
-        res.json(safe);
-    } catch {
-        res.status(500).json({ error: 'Server error' });
-    }
-});
-
 // GET current user's AI usage status
 api.get('/users/:userId/ai-usage', requireAuth, async (req, res) => {
     try {
@@ -1030,7 +1065,7 @@ api.get('/users/:userId/ai-usage', requireAuth, async (req, res) => {
         if (authUser.role !== 'admin' && authUser.id !== req.params.userId) {
             res.status(403).json({ error: 'Forbidden' }); return;
         }
-        const user = await storage.getUser(req.params.userId);
+        const user = await storage.getUser(String(req.params.userId));
         if (!user) { res.status(404).json({ error: 'User not found' }); return; }
         const today = new Date().toISOString().slice(0, 10);
         const resetAt = (user as any).aiUsageResetAt ?? today;
@@ -1058,6 +1093,87 @@ api.use('/interview', interviewRoutes);
 // AI Mentor routes
 import mentorRoutes from './mentorRoutes.js';
 api.use('/mentor', mentorRoutes);
+
+// ── Problems API ──────────────────────────────────────────────────────────────
+import { ProblemModel } from './models.js';
+
+/**
+ * GET /api/problems
+ * Query params:
+ *   difficulty = easy | medium | hard
+ *   topic      = Arrays | Graphs | ...
+ *   tags       = comma-separated tag list (any match)
+ *   search     = full-text search on title
+ *   page       = page number (default 1)
+ *   limit      = results per page (default 20, max 100)
+ */
+api.get('/problems', async (req, res) => {
+    try {
+        const { difficulty, topic, tags, search, page = '1', limit = '20' } = req.query as Record<string, string>;
+
+        const filter: Record<string, any> = {};
+        if (difficulty) filter.difficulty = difficulty.toLowerCase();
+        if (topic) filter.topic = { $regex: new RegExp(`^${topic}$`, 'i') };
+        if (tags) filter.tags = { $in: tags.split(',').map(t => t.trim().toLowerCase()) };
+        if (search) filter.title = { $regex: new RegExp(search, 'i') };
+
+        const pageNum = Math.max(1, parseInt(page, 10));
+        const limitNum = Math.min(100, Math.max(1, parseInt(limit, 10)));
+        const skip = (pageNum - 1) * limitNum;
+
+        const [problems, total] = await Promise.all([
+            ProblemModel.find(filter, { description: 0 }) // exclude heavy field from list view
+                .sort({ leetcodeId: 1 })
+                .skip(skip)
+                .limit(limitNum)
+                .lean(),
+            ProblemModel.countDocuments(filter),
+        ]);
+
+        res.json({
+            problems,
+            pagination: { page: pageNum, limit: limitNum, total, pages: Math.ceil(total / limitNum) },
+        });
+    } catch (err: any) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+/**
+ * GET /api/problems/:slug
+ * Returns full problem including description and test cases.
+ */
+api.get('/problems/:slug', async (req, res) => {
+    try {
+        const problem = await ProblemModel.findOne({ slug: req.params.slug }).lean();
+        if (!problem) return res.status(404).json({ error: 'Problem not found' });
+        res.json(problem);
+    } catch (err: any) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+/**
+ * GET /api/problems/random
+ * Returns a random problem, optionally filtered by difficulty/topic.
+ */
+api.get('/problems/random', async (req, res) => {
+    try {
+        const { difficulty, topic } = req.query as Record<string, string>;
+        const filter: Record<string, any> = {};
+        if (difficulty) filter.difficulty = difficulty.toLowerCase();
+        if (topic) filter.topic = { $regex: new RegExp(`^${topic}$`, 'i') };
+
+        const count = await ProblemModel.countDocuments(filter);
+        if (count === 0) return res.status(404).json({ error: 'No problems match the filter' });
+
+        const skip = Math.floor(Math.random() * count);
+        const problem = await ProblemModel.findOne(filter).skip(skip).lean();
+        res.json(problem);
+    } catch (err: any) {
+        res.status(500).json({ error: err.message });
+    }
+});
 
 // Export the router for use elsewhere
 export { api };
