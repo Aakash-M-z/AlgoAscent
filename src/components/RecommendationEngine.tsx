@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Sparkles, TrendingUp, BookOpen, RefreshCw, ExternalLink, ChevronRight, Zap, Target, AlertCircle } from 'lucide-react';
 import { Activity } from '../types';
@@ -144,6 +144,8 @@ const RecommendationEngine: React.FC<Props> = ({ activities, autoFetch = false }
     const [diffFilter, setDiffFilter] = useState<'All' | 'Easy' | 'Medium' | 'Hard'>('All');
     const [topicFilter, setTopicFilter] = useState<string>('All');
 
+    const hasFetchedRef = useRef(false);
+
     const fetch = useCallback(async () => {
         if (activities.length === 0) return;
         setLoading(true);
@@ -159,7 +161,13 @@ const RecommendationEngine: React.FC<Props> = ({ activities, autoFetch = false }
         }
     }, [activities]);
 
-    useEffect(() => { if (autoFetch && activities.length > 0) fetch(); }, [autoFetch]);
+    // Auto-fetch once on mount if autoFetch is true — ref guard prevents re-running
+    useEffect(() => {
+        if (autoFetch && activities.length > 0 && !hasFetchedRef.current) {
+            hasFetchedRef.current = true;
+            fetch();
+        }
+    }, [autoFetch, activities.length > 0]); // eslint-disable-line react-hooks/exhaustive-deps
 
     const filteredProblems = data?.problems.filter(p => {
         if (diffFilter !== 'All' && p.difficulty !== diffFilter) return false;
