@@ -1,6 +1,9 @@
 import 'dotenv/config';
 import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
+import morgan from 'morgan';
+import helmet from 'helmet';
+import rateLimit from 'express-rate-limit';
 import axios, { AxiosError } from 'axios';
 import { storage } from './storage.js';
 import { InsertUser, InsertActivity, InsertTask } from '../shared/schema.js';
@@ -17,6 +20,36 @@ const __dirname = path.dirname(__filename);
 
 const app = express();
 
+// ── Security headers ──────────────────────────────────────────────
+app.use(helmet({
+    crossOriginEmbedderPolicy: false,   // needed for Google OAuth
+    contentSecurityPolicy: false,        // managed by Vercel/CDN
+}));
+
+// ── Request logging ───────────────────────────────────────────────
+app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));
+
+// ── Global rate limiting ──────────────────────────────────────────
+// 200 req / 15 min per IP — generous for normal use, blocks abuse
+const globalLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 200,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { error: 'Too many requests. Please try again later.' },
+    skip: (req) => req.path === '/api/health', // never rate-limit health checks
+});
+app.use(globalLimiter);
+
+// Stricter limiter for auth endpoints — 20 attempts / 15 min
+const authLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 20,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { error: 'Too many login attempts. Please try again in 15 minutes.' },
+});
+
 // ── Global middleware MUST come before route mounting ─────────────
 app.use(cors({
     origin: [
@@ -29,7 +62,7 @@ app.use(cors({
     allowedHeaders: ['Content-Type', 'Authorization', 'x-admin-id', 'x-user-id'],
     credentials: true,
 }));
-app.use(express.json());
+app.use(express.json({ limit: '2mb' }));  // prevent oversized payloads
 
 // COOP headers — required for Google OAuth popup (window.closed) to work
 app.use((_req, res, next) => {
@@ -66,7 +99,7 @@ api.get('/health/details', async (_req, res) => {
 });
 
 // Login
-api.post('/login', async (req, res) => {
+api.post('/login', authLimiter, async (req, res) => {
     try {
         const { email, password } = req.body;
         if (!email || !password) {
@@ -102,7 +135,7 @@ api.post('/login', async (req, res) => {
 });
 
 // Register
-api.post('/register', async (req, res) => {
+api.post('/register', authLimiter, async (req, res) => {
     try {
         const userData: InsertUser = req.body;
         if (!userData.email || !userData.password || !userData.username) {
@@ -1197,10 +1230,21 @@ api.get('/problems/random', async (req, res) => {
 // Export the router for use elsewhere
 export { api };
 
-// Global error handler (required for Express 5 async errors)
-app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
-    console.error('Unhandled error:', err);
-    res.status(500).json({ error: err?.message || 'Internal server error' });
+// ── Global error handler (Express 5 async errors) ─────────────────────────────
+app.use((err: any, req: Request, res: Response, _next: NextFunction) => {
+    const status = err.status ?? err.statusCode ?? 500;
+    const message = err.message || 'Internal server error';
+
+    // Don't log 4xx — those are client errors, not server bugs
+    if (status >= 500) {
+        console.error(`[error] ${req.method} ${req.path} →`, err);
+    }
+
+    // Never expose stack traces in production
+    res.status(status).json({
+        error: message,
+        ...(process.env.NODE_ENV !== 'production' && { stack: err.stack }),
+    });
 });
 
 if (process.env.NODE_ENV === 'production' && process.env.VERCEL !== '1') {
