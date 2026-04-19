@@ -5,6 +5,7 @@ export interface User {
   username?: string;
   role: 'admin' | 'user';
   plan: 'free' | 'premium';
+  isActive?: boolean;       // optional — older sessions may not have it
   aiUsageCount?: number;
   aiUsageResetAt?: string;
 }
