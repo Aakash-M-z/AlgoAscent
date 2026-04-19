@@ -103,6 +103,7 @@ api.post('/register', async (req, res) => {
         if (!(userData as any).plan) (userData as any).plan = 'free';
         if ((userData as any).aiUsageCount === undefined) (userData as any).aiUsageCount = 0;
         if (!(userData as any).aiUsageResetAt) (userData as any).aiUsageResetAt = new Date().toISOString().slice(0, 10);
+        if ((userData as any).isActive === undefined) (userData as any).isActive = true;
         const user = await storage.createUser(userData);
         const { password: _, ...safeUser } = user;
         const jwtToken = signToken({ id: user.id, email: user.email, role: user.role, plan: (user as any).plan ?? 'free' });
@@ -151,6 +152,7 @@ api.post('/auth/google', async (req, res) => {
                 plan: 'free',
                 aiUsageCount: 0,
                 aiUsageResetAt: new Date().toISOString().slice(0, 10),
+                isActive: true,
             });
         }
         const { password: _, ...safeUser } = user;
@@ -1063,7 +1065,7 @@ api.get('/users/:userId/ai-usage', requireAuth, async (req, res) => {
         if (authUser.role !== 'admin' && authUser.id !== req.params.userId) {
             res.status(403).json({ error: 'Forbidden' }); return;
         }
-        const user = await storage.getUser(req.params.userId);
+        const user = await storage.getUser(String(req.params.userId));
         if (!user) { res.status(404).json({ error: 'User not found' }); return; }
         const today = new Date().toISOString().slice(0, 10);
         const resetAt = (user as any).aiUsageResetAt ?? today;

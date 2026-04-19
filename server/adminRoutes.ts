@@ -144,7 +144,7 @@ router.patch('/users/:id', async (req: Request, res: Response) => {
 
         if (!user) return res.status(404).json({ error: 'User not found' });
 
-        await logAction(req, 'UPDATE_USER', req.params.id, (user as any).email,
+        await logAction(req, 'UPDATE_USER', String(req.params.id), (user as any).email,
             `Updated: ${JSON.stringify(parsed.data)}`);
 
         res.json(user);
@@ -160,7 +160,7 @@ router.delete('/users/:id', async (req: Request, res: Response) => {
     }
     try {
         const admin = (req as any).adminUser;
-        console.log(`[admin/delete] id=${req.params.id} | adminId=${admin?.id}`);
+        console.log(`[admin/delete] id=${String(req.params.id)} | adminId=${admin?.id}`);
 
         // Prevent admin from deactivating themselves
         if (req.params.id === admin?.id) {
@@ -177,7 +177,7 @@ router.delete('/users/:id', async (req: Request, res: Response) => {
 
         if (!user) return res.status(404).json({ error: 'User not found' });
 
-        await logAction(req, 'DEACTIVATE_USER', req.params.id, (user as any).email,
+        await logAction(req, 'DEACTIVATE_USER', String(req.params.id), (user as any).email,
             `Deactivated user "${(user as any).username}" — access revoked immediately`);
 
         res.status(204).send();

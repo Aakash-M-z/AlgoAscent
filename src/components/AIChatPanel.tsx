@@ -154,7 +154,7 @@ const AIChatPanel: React.FC<Props> = ({ context, accentColor, accentBg, onClose 
         // Update historyRef synchronously before the API call — no useEffect needed
         historyRef.current = [
             ...historyRef.current,
-            { role: 'user', content: trimmed },
+            { role: 'user' as const, content: trimmed },
         ].slice(-10);
 
         setMessages(prev => [...prev, userMsg]);
@@ -203,7 +203,7 @@ const AIChatPanel: React.FC<Props> = ({ context, accentColor, accentBg, onClose 
             // Keep historyRef in sync with AI response too
             historyRef.current = [
                 ...historyRef.current,
-                { role: 'assistant', content: aiReply },
+                { role: 'assistant' as const, content: String(aiReply) },
             ].slice(-10);
             setMessages(prev => [...prev, {
                 id: makeId(), role: 'ai', text: aiReply, ts: new Date(),
