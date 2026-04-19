@@ -73,9 +73,25 @@ api.post('/login', async (req, res) => {
             res.status(400).json({ error: 'Email and password are required' }); return;
         }
         const user = await storage.getUserByEmail(email.trim().toLowerCase());
-        if (!user || user.password !== password) {
+        if (!user) {
             res.status(401).json({ error: 'Invalid email or password' }); return;
         }
+
+        // Support both bcrypt hashes (new) and plain text (legacy migration)
+        let passwordMatch = false;
+        if (user.password.startsWith('$2b$') || user.password.startsWith('$2a$')) {
+            // bcrypt hash — use compare
+            const bcrypt = await import('bcryptjs');
+            passwordMatch = await bcrypt.compare(password, user.password);
+        } else {
+            // Legacy plain text
+            passwordMatch = user.password === password;
+        }
+
+        if (!passwordMatch) {
+            res.status(401).json({ error: 'Invalid email or password' }); return;
+        }
+
         const { password: _, ...safeUser } = user;
         const token = signToken({ id: user.id, email: user.email, role: user.role, plan: (user as any).plan ?? 'free' });
         res.json({ user: safeUser, token });
@@ -104,6 +120,9 @@ api.post('/register', async (req, res) => {
         if ((userData as any).aiUsageCount === undefined) (userData as any).aiUsageCount = 0;
         if (!(userData as any).aiUsageResetAt) (userData as any).aiUsageResetAt = new Date().toISOString().slice(0, 10);
         if ((userData as any).isActive === undefined) (userData as any).isActive = true;
+        // Hash password before storing
+        const bcrypt = await import('bcryptjs');
+        userData.password = await bcrypt.hash(userData.password, 12);
         const user = await storage.createUser(userData);
         const { password: _, ...safeUser } = user;
         const jwtToken = signToken({ id: user.id, email: user.email, role: user.role, plan: (user as any).plan ?? 'free' });

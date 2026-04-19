@@ -12,7 +12,8 @@
     "preview": "vite preview",
     "ingest": "tsx scripts/ingest-leetcode.ts",
     "ingest:dry": "tsx scripts/ingest-leetcode.ts --dry-run",
-    "test:email": "tsx scripts/test-email.ts"
+    "test:email": "tsx scripts/test-email.ts",
+    "verify-db": "tsx scripts/verify-db.ts"
   },
   "devDependencies": {
     "@types/react": "^19.1.8",
