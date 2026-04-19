@@ -78,18 +78,24 @@ router.post('/forgot-password', async (req: any, res: any) => {
         return res.status(400).json({ error: 'Valid email required' });
     }
 
+    // Always return 200 immediately — never reveal whether email exists
+    res.json({ message: 'If an account exists with that email, a reset link has been sent.' });
+
+    // Process after response is sent — token creation + email in sequence
+    // If email fails, token is cleaned up so user isn't left with a broken state
     try {
         const user = await storage.getUserByEmail(result.data.email);
-        if (user) {
-            // Fire-and-forget — never block the response on email delivery
-            sendPasswordResetEmail(user.email, user.username).catch(err =>
-                console.error('[forgot-password] Email send failed:', err?.message)
-            );
+        if (!user) return;
+
+        const sent = await sendPasswordResetEmail(user.email, user.username);
+        if (!sent) {
+            // Email failed — clean up the token so user can retry cleanly
+            const { PasswordResetTokenModel } = await import('./models.js');
+            await PasswordResetTokenModel.deleteMany({ email: user.email });
+            console.error('[forgot-password] Email failed — token cleaned up for', user.email);
         }
-        res.json({ message: 'If an account exists with that email, a reset link has been sent.' });
     } catch (err: any) {
-        console.error('[forgot-password] Error:', err?.message);
-        res.status(500).json({ error: 'Server error. Please try again.' });
+        console.error('[forgot-password] Background processing error:', err?.message);
     }
 });
 
