@@ -1,8 +1,6 @@
-# Progress Tracker
+# AlgoAscent
 
-<p align="center">
-  <img src="./public/demo.gif" alt="Progress Tracker Demo" width="100%" />
-</p>
+
 
 <p align="center">
   <strong>A clean and practical dashboard to track your Data Structures and Algorithms learning journey</strong>
