@@ -18,12 +18,15 @@ if (!to || !to.includes('@')) {
     process.exit(1);
 }
 
-console.log('\n🔍 Brevo SMTP Email Diagnostics');
+console.log('\n🔍 Email SMTP Diagnostics');
 console.log('─'.repeat(50));
+console.log(`  Provider        : ${process.env.EMAIL_USER ? 'Gmail' : 'Brevo'}`);
 console.log(`  BREVO_SMTP_HOST : ${process.env.BREVO_SMTP_HOST ?? '❌ not set'}`);
 console.log(`  BREVO_SMTP_PORT : ${process.env.BREVO_SMTP_PORT ?? '❌ not set'}`);
 console.log(`  BREVO_SMTP_USER : ${process.env.BREVO_SMTP_USER ? '✅ present' : '❌ MISSING'}`);
 console.log(`  BREVO_SMTP_PASS : ${process.env.BREVO_SMTP_PASS ? '✅ present' : '❌ MISSING'}`);
+console.log(`  EMAIL_USER      : ${process.env.EMAIL_USER ?? '(not set — using Brevo)'}`);
+console.log(`  EMAIL_PASS      : ${process.env.EMAIL_PASS ? '✅ present' : '(not set)'}`);
 console.log(`  EMAIL_FROM      : ${process.env.EMAIL_FROM ?? '⚠️  not set — using default'}`);
 console.log(`  Sending to      : ${to}`);
 console.log('─'.repeat(50) + '\n');
