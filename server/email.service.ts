@@ -14,43 +14,57 @@ import crypto from 'crypto';
 import { welcomeTemplate, passwordResetTemplate, emailVerificationTemplate } from './email.templates.js';
 import { PasswordResetTokenModel } from './models.js';
 
-// ── Transporter singleton — recreated if credentials change ──────────────────
+// ── Transporter singleton — Gmail or Brevo, selected by env ──────────────────
 let _transporter: Transporter | null = null;
-let _transporterUser: string | undefined;
+let _transporterKey: string | undefined;
 
 function getTransporter(): Transporter {
-    const user = process.env.BREVO_SMTP_USER;
-    // Recreate if credentials changed or not yet created
-    if (!_transporter || user !== _transporterUser) {
-        _transporter = nodemailer.createTransport({
-            host: process.env.BREVO_SMTP_HOST || 'smtp-relay.brevo.com',
-            port: Number(process.env.BREVO_SMTP_PORT) || 587,
-            secure: false,
-            auth: {
-                user: process.env.BREVO_SMTP_USER,
-                pass: process.env.BREVO_SMTP_PASS,
-            },
-            connectionTimeout: 10_000,
-            greetingTimeout: 5_000,
-            socketTimeout: 10_000,
-        });
-        _transporterUser = user;
+    // Gmail takes priority if EMAIL_USER is set
+    const key = process.env.EMAIL_USER ?? process.env.BREVO_SMTP_USER;
+    if (!_transporter || key !== _transporterKey) {
+        if (process.env.EMAIL_USER) {
+            _transporter = nodemailer.createTransport({
+                service: 'gmail',
+                auth: {
+                    user: process.env.EMAIL_USER,
+                    pass: process.env.EMAIL_PASS,  // Gmail App Password (not account password)
+                },
+            });
+        } else {
+            _transporter = nodemailer.createTransport({
+                host: process.env.BREVO_SMTP_HOST || 'smtp-relay.brevo.com',
+                port: Number(process.env.BREVO_SMTP_PORT) || 587,
+                secure: false,
+                auth: {
+                    user: process.env.BREVO_SMTP_USER,
+                    pass: process.env.BREVO_SMTP_PASS,
+                },
+                connectionTimeout: 10_000,
+                greetingTimeout: 5_000,
+                socketTimeout: 10_000,
+            });
+        }
+        _transporterKey = key;
     }
     return _transporter;
 }
 
 // ── Verify SMTP on startup (non-blocking) ─────────────────────────────────────
-// Runs once after module loads — logs result so you know immediately if broken
 setImmediate(() => {
-    if (!process.env.BREVO_SMTP_USER || !process.env.BREVO_SMTP_PASS) return;
+    const provider = process.env.EMAIL_USER ? 'Gmail' : 'Brevo';
+    const ready = process.env.EMAIL_USER
+        ? !!(process.env.EMAIL_USER && process.env.EMAIL_PASS)
+        : !!(process.env.BREVO_SMTP_USER && process.env.BREVO_SMTP_PASS);
+    if (!ready) return;
     getTransporter().verify()
-        .then(() => console.log('[email] ✅ SMTP connection verified (Brevo)'))
-        .catch(err => console.error('[email] ❌ SMTP verification failed:', err?.message));
+        .then(() => console.log(`[email] ✅ SMTP connection verified (${provider})`))
+        .catch(err => console.error(`[email] ❌ SMTP verification failed (${provider}):`, err?.message));
 });
 
 // ── Read at call time — never at module load ──────────────────────────────────
 function getFromAddress(): string {
-    return process.env.EMAIL_FROM || 'AlgoAscent <noreply@algoscent.com>';
+    return process.env.EMAIL_FROM
+        || (process.env.EMAIL_USER ? `AlgoAscent <${process.env.EMAIL_USER}>` : 'AlgoAscent <a88762001@smtp-brevo.com>');
 }
 
 function getFrontendUrl(): string {
@@ -59,10 +73,13 @@ function getFrontendUrl(): string {
 
 // ── Guard — skip if SMTP not configured ──────────────────────────────────────
 function isEmailEnabled(): boolean {
+    // Gmail takes priority
+    if (process.env.EMAIL_USER && process.env.EMAIL_PASS) return true;
+    // Brevo fallback
     const user = process.env.BREVO_SMTP_USER;
     const pass = process.env.BREVO_SMTP_PASS;
     if (!user || !pass || user.trim() === '' || pass.trim() === '') {
-        console.warn('[email] ⚠️  BREVO_SMTP_USER or BREVO_SMTP_PASS not set — email skipped');
+        console.warn('[email] ⚠️  No email credentials configured — email skipped');
         return false;
     }
     return true;
