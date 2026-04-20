@@ -11,7 +11,7 @@
 
 import nodemailer, { Transporter } from 'nodemailer';
 import crypto from 'crypto';
-import { welcomeTemplate, passwordResetTemplate, emailVerificationTemplate } from './email.templates.js';
+import { welcomeTemplate, passwordResetTemplate, emailVerificationTemplate, accountDeactivatedTemplate, accountActivatedTemplate } from './email.templates.js';
 import { PasswordResetTokenModel } from './models.js';
 
 // ── Transporter singleton — Gmail or Brevo, selected by env ──────────────────
@@ -174,5 +174,31 @@ export async function sendVerificationEmail(email: string, username: string): Pr
         subject: 'Verify your AlgoAscent email address',
         html: emailVerificationTemplate(username, verifyUrl),
         tag: 'verify-email',
+    });
+}
+
+/**
+ * Send account deactivation notification.
+ * Called after admin deactivates a user.
+ */
+export async function sendAccountDeactivatedEmail(email: string, username: string): Promise<void> {
+    await send({
+        to: email,
+        subject: 'Your AlgoAscent account has been deactivated',
+        html: accountDeactivatedTemplate(username),
+        tag: 'account-deactivated',
+    });
+}
+
+/**
+ * Send account activation notification.
+ * Called after admin reactivates a user.
+ */
+export async function sendAccountActivatedEmail(email: string, username: string): Promise<void> {
+    await send({
+        to: email,
+        subject: 'Your AlgoAscent account has been reactivated',
+        html: accountActivatedTemplate(username),
+        tag: 'account-activated',
     });
 }
