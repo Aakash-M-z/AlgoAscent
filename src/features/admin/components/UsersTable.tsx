@@ -106,7 +106,7 @@ const UsersTable: React.FC = () => {
         }
     };
 
-    // ── Single delete ─────────────────────────────────────────────────────────
+    // ── Single deactivate ─────────────────────────────────────────────────────
     const handleDeleteOne = async (u: AdminUser) => {
         if (!confirm(`Deactivate "${u.username}"? They will be logged out on their next request.`)) return;
         // Optimistic — remove from UI immediately
@@ -122,7 +122,24 @@ const UsersTable: React.FC = () => {
         }
     };
 
-    // ── Edit (role / plan) ────────────────────────────────────────────────────
+    // ── Toggle active / inactive ──────────────────────────────────────────────
+    const handleToggleStatus = async (u: AdminUser) => {
+        const currentlyActive = (u as any).isActive !== false;
+        const willBeActive = !currentlyActive;
+        const action = willBeActive ? 'Activate' : 'Deactivate';
+        if (!confirm(`${action} "${u.username}"?`)) return;
+        // Optimistic update
+        setUsers(prev => prev.map(x => x._id === u._id ? { ...x, isActive: willBeActive } as any : x));
+        try {
+            await adminApi.toggleUserStatus(u._id, willBeActive);
+            toast(`"${u.username}" ${willBeActive ? 'activated' : 'deactivated'}`, 'success');
+            loadUsers(true);
+        } catch (err: any) {
+            const msg = err?.response?.data?.error ?? `Failed to ${action.toLowerCase()} user`;
+            toast(msg, 'error');
+            loadUsers();
+        }
+    };    // ── Edit (role / plan) ────────────────────────────────────────────────────
     const applyEdit = async (field: 'role' | 'plan', value: string) => {
         if (!editUser) return;
         // Optimistic update
@@ -299,11 +316,14 @@ const UsersTable: React.FC = () => {
                                         </button>
                                         {u._id !== currentUser?.id && (
                                             <button
-                                                onClick={() => handleDeleteOne(u)}
-                                                className="text-red-500/60 hover:text-red-400 bg-red-500/5 px-3 py-1.5 rounded border border-red-500/10 hover:border-red-500/30 hover:bg-red-500/10 transition-colors text-xs"
-                                                title="Deactivate user"
+                                                onClick={() => handleToggleStatus(u)}
+                                                className={`px-3 py-1.5 rounded border transition-colors text-xs font-medium ${(u as any).isActive !== false
+                                                        ? 'text-red-500/60 hover:text-red-400 bg-red-500/5 border-red-500/10 hover:border-red-500/30 hover:bg-red-500/10'
+                                                        : 'text-green-500/70 hover:text-green-400 bg-green-500/5 border-green-500/10 hover:border-green-500/30 hover:bg-green-500/10'
+                                                    }`}
+                                                title={(u as any).isActive !== false ? 'Deactivate user' : 'Activate user'}
                                             >
-                                                ✕
+                                                {(u as any).isActive !== false ? 'Deactivate' : 'Activate'}
                                             </button>
                                         )}
                                     </div>

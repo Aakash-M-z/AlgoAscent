@@ -53,7 +53,7 @@ const AdminPanel: React.FC = () => {
     return (
         <div className="section-gap animate-fadeIn min-h-[80vh]">
 
-            {/* System status — auto-refreshes every 60s, hides when all good */}
+            {/* System status — single instance, auto-refreshes every 60s */}
             <SystemStatus hideWhenOnline={false} refreshInterval={60_000} />
 
             {/* Header */}
@@ -68,7 +68,7 @@ const AdminPanel: React.FC = () => {
                     </p>
                 </div>
                 <div className="hidden md:flex gap-3">
-                    <SystemStatus hideWhenOnline={false} refreshInterval={60_000} />
+                    {/* Status shown above — no duplicate here */}
                 </div>
             </div>
 

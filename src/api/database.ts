@@ -22,14 +22,17 @@ export class DatabaseAPI {
   // ── Auth (no token needed — plain fetch) ────────────────────────
 
   async login(email: string, password: string): Promise<AuthResponse | null> {
-    try {
-      const res = await fetch(`${API_BASE}/api/login`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password }),
-      });
-      if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error || `HTTP ${res.status}`); }
-      return res.json();
-    } catch (e) { console.error('login:', e); return null; }
+    const res = await fetch(`${API_BASE}/api/login`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      const err: any = new Error(data.message || data.error || `HTTP ${res.status}`);
+      err.code = data.error;
+      throw err;
+    }
+    return data;
   }
 
   async register(email: string, password: string, username: string): Promise<AuthResponse | null> {

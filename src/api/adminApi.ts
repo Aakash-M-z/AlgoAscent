@@ -34,6 +34,10 @@ export const adminApi = {
         const res = await api.patch(`/admin/users/${id}`, data);
         return res.data;
     },
+    toggleUserStatus: async (id: string, isActive: boolean) => {
+        const res = await api.patch(`/admin/users/${id}/status`, { isActive });
+        return res.data;
+    },
     deleteUser: async (id: string) => {
         await api.delete(`/admin/users/${id}`);
     },

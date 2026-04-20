@@ -14,8 +14,8 @@ const BORDER = '#222222';
 
 /** Shared wrapper — consistent header/footer across all emails */
 function layout(content: string): string {
-    const frontendUrl = process.env.FRONTEND_URL || 'https://progresss-tracker.vercel.app';
-    return `<!DOCTYPE html>
+  const frontendUrl = process.env.FRONTEND_URL || 'https://progresss-tracker.vercel.app';
+  return `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
@@ -54,7 +54,7 @@ function layout(content: string): string {
 
 /** Reusable CTA button */
 function ctaButton(href: string, label: string): string {
-    return `<table width="100%" cellpadding="0" cellspacing="0" style="margin:28px 0;">
+  return `<table width="100%" cellpadding="0" cellspacing="0" style="margin:28px 0;">
   <tr><td align="center">
     <a href="${href}"
        style="display:inline-block;background:${GOLD};color:#0B0B0B;font-weight:700;font-size:14px;
@@ -72,9 +72,9 @@ const divider = `<hr style="border:0;border-top:1px solid ${BORDER};margin:24px 
 // WELCOME EMAIL
 // ─────────────────────────────────────────────────────────────────────────────
 export function welcomeTemplate(username: string): string {
-    const dashboardUrl = `${process.env.FRONTEND_URL || 'https://progresss-tracker.vercel.app'}/dashboard`;
+  const dashboardUrl = `${process.env.FRONTEND_URL || 'https://progresss-tracker.vercel.app'}/dashboard`;
 
-    const content = `
+  const content = `
     <h1 style="margin:0 0 8px;font-size:22px;font-weight:800;color:${TEXT};">
       Welcome, ${username} 👋
     </h1>
@@ -90,11 +90,11 @@ export function welcomeTemplate(username: string): string {
         <p style="margin:0 0 14px;font-size:11px;font-weight:700;color:${MUTED};
                   text-transform:uppercase;letter-spacing:0.1em;">What's waiting for you</p>
         ${[
-            ['◈', 'AI-powered progress analysis and recommendations'],
-            ['◐', 'Mock interviews — DSA, System Design, OS, OOP, CN'],
-            ['◆', 'XP system, badges, and streak tracking'],
-            ['▦', 'Analytics dashboard with activity heatmap'],
-        ].map(([icon, text]) => `
+      ['◈', 'AI-powered progress analysis and recommendations'],
+      ['◐', 'Mock interviews — DSA, System Design, OS, OOP, CN'],
+      ['◆', 'XP system, badges, and streak tracking'],
+      ['▦', 'Analytics dashboard with activity heatmap'],
+    ].map(([icon, text]) => `
         <div style="display:flex;align-items:flex-start;gap:10px;margin-bottom:10px;">
           <span style="color:${GOLD};font-size:14px;flex-shrink:0;margin-top:1px;">${icon}</span>
           <span style="font-size:14px;color:${TEXT};line-height:1.5;">${text}</span>
@@ -108,14 +108,14 @@ export function welcomeTemplate(username: string): string {
       If you didn't create this account, you can safely ignore this email.
     </p>`;
 
-    return layout(content);
+  return layout(content);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // PASSWORD RESET EMAIL
 // ─────────────────────────────────────────────────────────────────────────────
 export function passwordResetTemplate(username: string, resetUrl: string): string {
-    const content = `
+  const content = `
     <h1 style="margin:0 0 8px;font-size:22px;font-weight:800;color:${TEXT};">
       Reset your password
     </h1>
@@ -151,14 +151,14 @@ export function passwordResetTemplate(username: string, resetUrl: string): strin
       For security questions, contact us at support@algoscent.com
     </p>`;
 
-    return layout(content);
+  return layout(content);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // EMAIL VERIFICATION (optional flow)
 // ─────────────────────────────────────────────────────────────────────────────
 export function emailVerificationTemplate(username: string, verifyUrl: string): string {
-    const content = `
+  const content = `
     <h1 style="margin:0 0 8px;font-size:22px;font-weight:800;color:${TEXT};">
       Verify your email
     </h1>
@@ -177,5 +177,75 @@ export function emailVerificationTemplate(username: string, verifyUrl: string): 
       If you didn't sign up for ${APP_NAME}, ignore this email.
     </p>`;
 
-    return layout(content);
+  return layout(content);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ACCOUNT DEACTIVATED EMAIL
+// ─────────────────────────────────────────────────────────────────────────────
+export function accountDeactivatedTemplate(username: string): string {
+  const content = `
+    <h1 style="margin:0 0 8px;font-size:22px;font-weight:800;color:${TEXT};">
+      Your account has been deactivated
+    </h1>
+    <p style="margin:0 0 24px;font-size:15px;color:${MUTED};line-height:1.6;">
+      Hi <strong style="color:${TEXT};">${username}</strong>, your
+      <strong style="color:${GOLD};">${APP_NAME}</strong> account has been deactivated by an administrator.
+    </p>
+
+    <table width="100%" cellpadding="0" cellspacing="0"
+           style="background:rgba(239,68,68,0.06);border:1px solid rgba(239,68,68,0.2);
+                  border-radius:10px;padding:14px 18px;margin-bottom:24px;">
+      <tr><td>
+        <p style="margin:0;font-size:13px;color:#ef4444;line-height:1.6;">
+          🔒 You will no longer be able to sign in to your account.
+        </p>
+      </td></tr>
+    </table>
+
+    <p style="margin:0 0 24px;font-size:14px;color:${MUTED};line-height:1.6;">
+      If you believe this was done in error or have questions, please contact our support team.
+    </p>
+
+    ${divider}
+    <p style="margin:0;font-size:12px;color:${MUTED};text-align:center;line-height:1.6;">
+      This is an automated notification from ${APP_NAME}.
+    </p>`;
+
+  return layout(content);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ACCOUNT ACTIVATED EMAIL
+// ─────────────────────────────────────────────────────────────────────────────
+export function accountActivatedTemplate(username: string): string {
+  const dashboardUrl = `${process.env.FRONTEND_URL || 'https://progresss-tracker.vercel.app'}/dashboard`;
+
+  const content = `
+    <h1 style="margin:0 0 8px;font-size:22px;font-weight:800;color:${TEXT};">
+      Your account has been reactivated
+    </h1>
+    <p style="margin:0 0 24px;font-size:15px;color:${MUTED};line-height:1.6;">
+      Hi <strong style="color:${TEXT};">${username}</strong>, your
+      <strong style="color:${GOLD};">${APP_NAME}</strong> account has been reactivated by an administrator.
+      You can now sign in and continue your DSA journey.
+    </p>
+
+    <table width="100%" cellpadding="0" cellspacing="0"
+           style="background:rgba(34,197,94,0.06);border:1px solid rgba(34,197,94,0.2);
+                  border-radius:10px;padding:14px 18px;margin-bottom:24px;">
+      <tr><td>
+        <p style="margin:0;font-size:13px;color:#22c55e;line-height:1.6;">
+          ✅ Your account is now active and fully accessible.
+        </p>
+      </td></tr>
+    </table>
+
+    ${ctaButton(dashboardUrl, 'Go to Dashboard →')}
+    ${divider}
+    <p style="margin:0;font-size:12px;color:${MUTED};text-align:center;line-height:1.6;">
+      This is an automated notification from ${APP_NAME}.
+    </p>`;
+
+  return layout(content);
 }
