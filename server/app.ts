@@ -37,7 +37,7 @@ const globalLimiter = rateLimit({
     standardHeaders: true,
     legacyHeaders: false,
     message: { error: 'Too many requests. Please try again later.' },
-    skip: (req) => req.path === '/api/health', // never rate-limit health checks
+    skip: (req) => req.path === '/api/health' || req.path === '/api/health/details',
 });
 app.use(globalLimiter);
 
@@ -123,6 +123,14 @@ api.post('/login', authLimiter, async (req, res) => {
 
         if (!passwordMatch) {
             res.status(401).json({ error: 'Invalid email or password' }); return;
+        }
+
+        // Check if account is active — must be after password check to avoid user enumeration
+        if (user.isActive === false) {
+            res.status(403).json({
+                error: 'ACCOUNT_DEACTIVATED',
+                message: 'Your account has been deactivated. Please contact the administrator.',
+            }); return;
         }
 
         const { password: _, ...safeUser } = user;
