@@ -67,7 +67,11 @@ const Login: React.FC<LoginProps> = ({ onLogin, onBack }) => {
       login(result);
       onLogin?.();
     } catch (err: any) {
-      setError(err.message || 'Something went wrong. Please try again.');
+      if (err.code === 'ACCOUNT_DEACTIVATED') {
+        setError('Your account has been deactivated. Please contact the administrator.');
+      } else {
+        setError(err.message || 'Something went wrong. Please try again.');
+      }
     } finally {
       setLoading(false);
     }
