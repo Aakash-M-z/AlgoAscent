@@ -7,6 +7,7 @@ import {
     FeatureFlagModel, NotificationModel, InterviewSessionModel
 } from './models.js';
 import { sendWelcomeEmail } from './email.js';
+import { sendAccountDeactivatedEmail, sendAccountActivatedEmail } from './email.service.js';
 
 const router = Router();
 
@@ -124,6 +125,50 @@ router.post('/users', async (req: Request, res: Response) => {
     }
 });
 
+// ── PATCH /admin/users/:id/status — toggle isActive (MUST be before /:id) ────
+router.patch('/users/:id/status', async (req: Request, res: Response) => {
+    if (!(req as any).dbConnected) {
+        return res.status(503).json({ error: 'Database unavailable' });
+    }
+    try {
+        const admin = (req as any).adminUser;
+        const { isActive } = req.body;
+
+        if (typeof isActive !== 'boolean') {
+            return res.status(400).json({ error: 'isActive must be a boolean' });
+        }
+        if (req.params.id === admin?.id && !isActive) {
+            return res.status(400).json({ error: 'You cannot deactivate your own account' });
+        }
+
+        const user = await UserModel.findByIdAndUpdate(
+            req.params.id,
+            { $set: { isActive } },
+            { new: true, projection: { password: 0 } }
+        ).lean();
+
+        if (!user) return res.status(404).json({ error: 'User not found' });
+
+        const action = isActive ? 'ACTIVATE_USER' : 'DEACTIVATE_USER';
+        await logAction(req, action, String(req.params.id), (user as any).email,
+            `${isActive ? 'Activated' : 'Deactivated'} user "${(user as any).username}"`);
+
+        if (!isActive) {
+            sendAccountDeactivatedEmail((user as any).email, (user as any).username).catch(err =>
+                console.error('[admin/status] Deactivation email failed:', err?.message)
+            );
+        } else {
+            sendAccountActivatedEmail((user as any).email, (user as any).username).catch(err =>
+                console.error('[admin/status] Activation email failed:', err?.message)
+            );
+        }
+
+        res.json({ id: req.params.id, isActive });
+    } catch (err: any) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 // ── PATCH /admin/users/:id — update role and/or plan ─────────────────────────
 router.patch('/users/:id', async (req: Request, res: Response) => {
     if (!(req as any).dbConnected) {
@@ -152,8 +197,6 @@ router.patch('/users/:id', async (req: Request, res: Response) => {
         res.status(500).json({ error: err.message });
     }
 });
-
-// ── DELETE /admin/users/:id — soft delete (sets isActive = false) ─────────────
 router.delete('/users/:id', async (req: Request, res: Response) => {
     if (!(req as any).dbConnected) {
         return res.status(503).json({ error: 'Database unavailable' });
@@ -179,6 +222,11 @@ router.delete('/users/:id', async (req: Request, res: Response) => {
 
         await logAction(req, 'DEACTIVATE_USER', String(req.params.id), (user as any).email,
             `Deactivated user "${(user as any).username}" — access revoked immediately`);
+
+        // Notify the user their account was deactivated — fire-and-forget
+        sendAccountDeactivatedEmail((user as any).email, (user as any).username).catch(err =>
+            console.error('[admin/deactivate] Notification email failed:', err?.message)
+        );
 
         res.status(204).send();
     } catch (err: any) {
