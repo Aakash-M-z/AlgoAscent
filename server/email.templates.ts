@@ -301,3 +301,74 @@ export function assessmentAssignedTemplate(
 
   return layout(content);
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PAYMENT RECEIPT EMAIL
+// ─────────────────────────────────────────────────────────────────────────────
+export function paymentReceiptTemplate(
+  username: string,
+  planName: string,
+  amount: number,
+  orderId: string,
+  paymentId: string,
+  dateFormatted: string,
+  expiresAtFormatted: string
+): string {
+  const content = `
+    <div style="text-align:center;margin-bottom:20px;">
+      <span style="display:inline-block;padding:6px 14px;background:rgba(255,59,31,0.15);border:1px solid rgba(255,59,31,0.3);border-radius:20px;color:#FF3B1F;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;">
+        Payment Confirmed
+      </span>
+    </div>
+
+    <h1 style="margin:0 0 8px;font-size:22px;font-weight:700;color:${TEXT};text-align:center;">
+      Welcome to ${planName}! 👑
+    </h1>
+    <p style="margin:0 0 24px;font-size:14px;color:${MUTED};line-height:1.6;text-align:center;">
+      Hi <strong style="color:${TEXT};">${username}</strong>, your payment has been successfully processed and verified. Your Pro access is now active.
+    </p>
+
+    <!-- Receipt Box -->
+    <table width="100%" cellpadding="0" cellspacing="0"
+           style="background:#14141E;border:1px solid rgba(255,255,255,0.1);
+                  border-radius:12px;padding:20px;margin-bottom:24px;color:${TEXT};">
+      <tr>
+        <td style="padding:8px 0;font-size:13px;color:${MUTED};">Plan Purchased:</td>
+        <td style="padding:8px 0;font-size:13px;font-weight:700;text-align:right;color:#FF3B1F;">${planName}</td>
+      </tr>
+      <tr>
+        <td style="padding:8px 0;font-size:13px;color:${MUTED};">Amount Paid:</td>
+        <td style="padding:8px 0;font-size:14px;font-weight:700;text-align:right;color:${TEXT};">₹${amount.toLocaleString('en-IN')}</td>
+      </tr>
+      <tr>
+        <td style="padding:8px 0;font-size:13px;color:${MUTED};">Order ID:</td>
+        <td style="padding:8px 0;font-size:12px;font-family:monospace;text-align:right;color:${TEXT};">${orderId}</td>
+      </tr>
+      <tr>
+        <td style="padding:8px 0;font-size:13px;color:${MUTED};">Transaction ID:</td>
+        <td style="padding:8px 0;font-size:12px;font-family:monospace;text-align:right;color:${TEXT};">${paymentId}</td>
+      </tr>
+      <tr>
+        <td style="padding:8px 0;font-size:13px;color:${MUTED};">Date & Time:</td>
+        <td style="padding:8px 0;font-size:12px;text-align:right;color:${TEXT};">${dateFormatted}</td>
+      </tr>
+      <tr>
+        <td style="padding:8px 0;font-size:13px;color:${MUTED};">Valid Until:</td>
+        <td style="padding:8px 0;font-size:12px;text-align:right;color:#10b981;font-weight:600;">${expiresAtFormatted}</td>
+      </tr>
+    </table>
+
+    <div style="text-align:center;">
+      <a href="https://progresss-tracker.vercel.app/dashboard"
+         style="display:inline-block;background:#FF3B1F;color:#ffffff;font-weight:600;font-size:13px;
+                padding:12px 28px;border-radius:10px;text-decoration:none;letter-spacing:0.3px;">
+        Open Pro Dashboard →
+      </a>
+    </div>
+
+    <p style="margin:24px 0 0;font-size:12px;color:${MUTED};text-align:center;line-height:1.6;">
+      Thank you for choosing ${APP_NAME}. If you have questions regarding this invoice, reply to this email.
+    </p>`;
+
+  return layout(content);
+}
