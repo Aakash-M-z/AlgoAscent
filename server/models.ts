@@ -9,6 +9,9 @@ const userSchema = new Schema({
     learningGoal: { type: String },
     role: { type: String, default: 'user', required: true },
     plan: { type: String, default: 'free', required: true },
+    subscriptionPlan: { type: String, enum: ['free', 'monthly', 'annual', 'lifetime'], default: 'free' },
+    subscriptionExpiresAt: { type: Date },
+    paymentHistory: { type: Array, default: [] },
     isActive: { type: Boolean, default: true, index: true },  // false = deactivated
     aiUsageCount: { type: Number, default: 0 },
     aiUsageResetAt: { type: String, default: () => new Date().toISOString().slice(0, 10) },
@@ -380,4 +383,66 @@ const assessmentQuestionBankSchema = new Schema({
     createdAt: { type: Date, default: Date.now }
 });
 export const AssessmentQuestionBankModel = mongoose.model('AssessmentQuestionBank', assessmentQuestionBankSchema);
+
+// ── Payment / Subscription Model ──────────────────────────────────────────
+const paymentSchema = new Schema({
+    userId: { type: String, required: true, index: true },
+    userEmail: { type: String, required: true, index: true },
+    orderId: { type: String, required: true, unique: true, index: true },
+    providerOrderId: { type: String, index: true },
+    providerPaymentId: { type: String, index: true },
+    paymentId: { type: String, index: true },
+    signature: { type: String },
+    amount: { type: Number, required: true },
+    amountInPaise: { type: Number },
+    currency: { type: String, default: 'INR' },
+    plan: { type: String, enum: ['monthly', 'annual', 'lifetime'], required: true },
+    billingCycle: { type: String, enum: ['monthly', 'annual', 'one-time'], required: true },
+    status: {
+        type: String,
+        enum: ['PENDING', 'UNDER_REVIEW', 'PAID', 'REJECTED', 'CANCELLED', 'EXPIRED', 'REFUNDED', 'CREATED'],
+        default: 'PENDING',
+        index: true
+    },
+    paymentMethod: { type: String, default: 'MANUAL_UPI' },
+    qrImageUrl: { type: String },
+    qrPayload: { type: String },
+    receipt: { type: String },
+    utrNumber: { type: String, index: true },
+    upiId: { type: String },
+    userSubmittedAt: { type: Date },
+    verifiedAt: { type: Date },
+    verifiedBy: { type: String },
+    adminNote: { type: String },
+    rejectionReason: { type: String },
+    metadata: { type: Schema.Types.Mixed, default: {} },
+    paidAt: { type: Date },
+    createdAt: { type: Date, default: Date.now, index: true },
+    updatedAt: { type: Date, default: Date.now }
+});
+
+paymentSchema.pre('save', function () {
+    this.updatedAt = new Date();
+});
+
+export const PaymentModel = mongoose.model('Payment', paymentSchema);
+
+// ── Payment Audit Trail Model ─────────────────────────────────────────────
+const paymentAuditSchema = new Schema({
+    paymentId: { type: String, required: true, index: true },
+    orderId: { type: String, required: true, index: true },
+    action: {
+        type: String,
+        enum: ['PAYMENT_CREATED', 'UTR_SUBMITTED', 'PAYMENT_APPROVED', 'PAYMENT_REJECTED', 'SUBSCRIPTION_ACTIVATED'],
+        required: true,
+        index: true
+    },
+    actor: { type: String, required: true },
+    actorRole: { type: String, default: 'user' },
+    metadata: { type: Schema.Types.Mixed, default: {} },
+    timestamp: { type: Date, default: Date.now, index: true }
+});
+
+export const PaymentAuditModel = mongoose.model('PaymentAudit', paymentAuditSchema);
+
 
