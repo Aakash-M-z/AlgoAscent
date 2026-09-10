@@ -8,10 +8,9 @@ export default {
   theme: {
     extend: {
       fontFamily: {
-        sans: ['"Work Sans"', 'Inter', 'system-ui', 'sans-serif'],
-        display: ['"Work Sans"', 'Poppins', 'sans-serif'],
-        mono: ['JetBrains Mono', 'Fira Code', 'monospace'],
-        orbitron: ['Orbitron', 'sans-serif'],
+        sans: ['Inter', '-apple-system', 'BlinkMacSystemFont', '"Segoe UI"', 'Roboto', 'sans-serif'],
+        display: ['Inter', '-apple-system', 'BlinkMacSystemFont', 'sans-serif'],
+        mono: ['"JetBrains Mono"', 'Fira Code', 'monospace'],
       },
       animation: {
         'fade-in': 'fadeIn 0.6s ease-out',
