@@ -112,12 +112,12 @@ const LeetCodeQuestions: React.FC<Props> = ({ activities, onAddActivity }) => {
         <div className="card-dark" style={{ padding: '28px', marginTop: '24px', background: '#07070a', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '16px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', flexWrap: 'wrap', gap: '12px' }}>
                 <div>
-                    <h3 className="card-title" style={{ fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '0.12em', fontWeight: 700, color: 'var(--gold)' }}>
+                    <h3 style={{ fontSize: '0.95rem', fontWeight: 600, color: '#EDEDED', letterSpacing: '-0.01em' }}>
                         LeetCode Problem Dataset
                     </h3>
-                    <p className="page-subheading" style={{ fontSize: '0.8rem', color: '#94a3b8', marginTop: '4px' }}>Browse, redirect, and track your solves directly</p>
+                    <p style={{ fontSize: '0.78rem', color: '#94a3b8', marginTop: '3px' }}>Browse, redirect, and track your solves directly</p>
                 </div>
-                <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', color: '#94a3b8', padding: '4px 12px', borderRadius: '999px', fontSize: '0.72rem', fontWeight: 600 }}>
+                <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', color: '#94a3b8', padding: '4px 12px', borderRadius: '999px', fontSize: '0.72rem', fontWeight: 500 }}>
                     {totalProblems} Problems Available
                 </div>
             </div>
@@ -204,11 +204,11 @@ const LeetCodeQuestions: React.FC<Props> = ({ activities, onAddActivity }) => {
                 <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.82rem' }}>
                     <thead>
                         <tr style={{ background: 'rgba(255,255,255,0.01)', borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
-                            <th style={{ padding: '12px 16px', color: '#475569', fontWeight: 700, fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.06em' }}>ID</th>
-                            <th style={{ padding: '12px 16px', color: '#475569', fontWeight: 700, fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Title</th>
-                            <th style={{ padding: '12px 16px', color: '#475569', fontWeight: 700, fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Topic</th>
-                            <th style={{ padding: '12px 16px', color: '#475569', fontWeight: 700, fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Difficulty</th>
-                            <th style={{ padding: '12px 16px', color: '#475569', fontWeight: 700, fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.06em', textAlign: 'center' }}>Status</th>
+                            <th style={{ padding: '12px 16px', color: '#64748b', fontWeight: 500, fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>ID</th>
+                            <th style={{ padding: '12px 16px', color: '#64748b', fontWeight: 500, fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Title</th>
+                            <th style={{ padding: '12px 16px', color: '#64748b', fontWeight: 500, fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Topic</th>
+                            <th style={{ padding: '12px 16px', color: '#64748b', fontWeight: 500, fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Difficulty</th>
+                            <th style={{ padding: '12px 16px', color: '#64748b', fontWeight: 500, fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.04em', textAlign: 'center' }}>Status</th>
                         </tr>
                     </thead>
                     <tbody>
