@@ -36,14 +36,14 @@ const MyAssessmentsPage: React.FC = () => {
     }, []);
 
     return (
-        <div className="section-gap animate-fadeIn pb-12">
+        <div className="section-gap animate-fadeIn pb-12 font-sans">
             {/* Header */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-white/10">
                 <div>
-                    <h2 className="text-2xl font-bold text-white flex items-center gap-2.5">
+                    <h2 className="text-xl font-semibold text-zinc-100 flex items-center gap-2.5">
                         <span className="text-[#FF3B1F]">◈</span> My Assigned Assessments
                     </h2>
-                    <p className="text-white/50 mt-1 text-xs">
+                    <p className="text-zinc-400 mt-1 text-xs">
                         View and take technical assessments, campus placements, and mock coding rounds assigned to you.
                     </p>
                 </div>
@@ -51,15 +51,15 @@ const MyAssessmentsPage: React.FC = () => {
 
             {/* Assessment List */}
             {isLoading ? (
-                <div className="py-20 text-center text-white/40 flex flex-col items-center justify-center gap-2">
-                    <div className="w-6 h-6 border-2 border-[#FF3B1F] border-t-transparent rounded-full animate-spin" />
-                    <span className="text-xs font-bold uppercase tracking-wider font-mono">Loading your assessments...</span>
+                <div className="py-20 text-center text-zinc-400 flex flex-col items-center justify-center gap-2">
+                    <div className="w-5 h-5 border-2 border-[#FF3B1F] border-t-transparent rounded-full animate-spin" />
+                    <span className="text-xs font-medium tracking-wide">Loading your assessments...</span>
                 </div>
             ) : assessments.length === 0 ? (
-                <div className="p-16 text-center border border-dashed border-white/10 rounded-2xl bg-white/[0.01]">
-                    <Layers className="w-12 h-12 text-white/30 mx-auto mb-3" />
-                    <h4 className="text-base font-bold text-white mb-1">No Assessments Assigned</h4>
-                    <p className="text-xs text-white/40 max-w-sm mx-auto mb-4">
+                <div className="p-16 text-center border border-white/10 rounded-2xl bg-white/[0.01]">
+                    <Layers className="w-10 h-10 text-zinc-500 mx-auto mb-3" />
+                    <h4 className="text-sm font-medium text-zinc-200 mb-1">No Assessments Assigned</h4>
+                    <p className="text-xs text-zinc-400 max-w-sm mx-auto">
                         When an administrator assigns you an evaluation or placement test, it will appear here.
                     </p>
                 </div>
