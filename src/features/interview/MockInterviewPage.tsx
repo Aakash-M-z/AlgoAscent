@@ -155,40 +155,39 @@ const MockInterviewPage = () => {
     }
 
     return (
-        <motion.div initial={{opacity: 0, y: 10}} animate={{opacity: 1, y: 0}} className="space-y-6 w-full">
+        <motion.div initial={{opacity: 0, y: 10}} animate={{opacity: 1, y: 0}} className="space-y-6 w-full font-sans">
             <div>
-                <h2 className="text-xl font-extrabold text-white flex items-center gap-2">
-                    <span className="p-1.5 rounded-lg bg-white/[0.06] border border-white/10 text-white text-sm">🎤</span>
+                <h2 className="text-lg font-semibold text-zinc-100 flex items-center gap-2">
+                    <span className="p-1.5 rounded-lg bg-white/[0.06] border border-white/10 text-white text-xs">🎤</span>
                     Mock Interview
                 </h2>
-                <p className="text-xs text-slate-400 mt-1">Practice DSA algorithms, system projects, and placement questions in real time.</p>
+                <p className="text-xs text-zinc-400 mt-1">Practice DSA algorithms, system projects, and placement questions in real time.</p>
             </div>
             
-            {/* ── DARK & WHITE HERO INTERVIEW LAUNCH CARD ─────────────────── */}
-            <div className="p-8 md:p-14 text-center rounded-3xl bg-[#090b14] border border-white/[0.08] shadow-[0_0_60px_rgba(0,0,0,0.8)] relative overflow-hidden backdrop-blur-xl">
+            {/* ── HERO INTERVIEW LAUNCH CARD ─────────────────── */}
+            <div className="p-8 md:p-12 text-center rounded-2xl bg-[#090b14] border border-white/[0.08] shadow-[0_0_60px_rgba(0,0,0,0.8)] relative overflow-hidden backdrop-blur-xl">
                 {/* Subtle dark ambient glow */}
-                <div className="absolute -top-32 left-1/2 -translate-x-1/2 w-[500px] h-[300px] bg-indigo-500/10 rounded-full blur-[100px] pointer-events-none" />
-                <div className="absolute -bottom-32 left-1/2 -translate-x-1/2 w-[500px] h-[300px] bg-purple-500/10 rounded-full blur-[100px] pointer-events-none" />
+                <div className="absolute -top-32 left-1/2 -translate-x-1/2 w-[500px] h-[300px] bg-[#FF3B1F]/10 rounded-full blur-[100px] pointer-events-none" />
 
                 {/* AI Bot Frame */}
-                <div className="w-20 h-20 mx-auto rounded-3xl bg-[#121422] border border-white/15 flex items-center justify-center mb-6 shadow-[0_0_30px_rgba(255,255,255,0.05)] relative group hover:border-indigo-400/50 transition-colors">
-                    <Bot className="w-9 h-9 text-slate-200" />
+                <div className="w-16 h-16 mx-auto rounded-2xl bg-[#121422] border border-white/15 flex items-center justify-center mb-5 shadow-inner">
+                    <Bot className="w-8 h-8 text-zinc-300" />
                 </div>
                 
-                <h3 className="text-2xl md:text-3xl font-extrabold text-white tracking-tight mb-3">
+                <h3 className="text-xl sm:text-2xl font-semibold text-zinc-100 tracking-tight mb-2.5">
                     Ready for your Technical Interview?
                 </h3>
-                <p className="text-slate-400 text-xs md:text-sm max-w-lg mx-auto mb-8 leading-relaxed">
+                <p className="text-zinc-400 text-xs sm:text-sm max-w-lg mx-auto mb-6 leading-relaxed">
                     Select your role, upload your resume, and enter an immersive live AI technical interview session covering project architecture, core CS, 1 live coding challenge, and behavioral questions.
                 </p>
                 
-                {/* Action CTA Button: Dark & White with Setup Modal Trigger */}
+                {/* Action CTA Button */}
                 <button 
                     onClick={() => {
                         setCurrentStep(1);
                         setIsSetupModalOpen(true);
                     }} 
-                    className="inline-flex items-center gap-2.5 px-8 py-3.5 rounded-2xl bg-white text-black font-extrabold text-sm hover:bg-slate-200 transition-all shadow-[0_0_24px_rgba(255,255,255,0.25)] hover:scale-105 active:scale-95 cursor-pointer"
+                    className="inline-flex items-center gap-2 px-7 py-3 rounded-xl bg-[#FF3B1F] text-white font-medium text-xs sm:text-sm hover:bg-[#E63219] transition-all shadow-md shadow-[#FF3B1F]/20 active:scale-95 cursor-pointer"
                 >
                     <span>Start Interview</span>
                     <ArrowRight className="w-4 h-4" />
