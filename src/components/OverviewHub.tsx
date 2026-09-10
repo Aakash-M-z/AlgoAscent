@@ -150,17 +150,17 @@ export const OverviewHub: React.FC<OverviewHubProps> = ({ activities, onAddActiv
 
                 <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6">
                     <div className="max-w-2xl">
-                        <div className="flex items-center gap-2 mb-3">
-                            <span className="w-2 h-2 rounded-full bg-[#FF3B1F] shadow-[0_0_8px_#FF3B1F]" />
-                            <span className="text-white/60 text-xs font-mono font-bold tracking-wider uppercase">
-                                ALGOASCENT DASHBOARD
+                        <div className="flex items-center gap-2 mb-2.5">
+                            <span className="w-2 h-2 rounded-full bg-[#FF3B1F]" />
+                            <span className="text-zinc-400 text-[11px] font-medium tracking-wider uppercase">
+                                AlgoAscent Dashboard
                             </span>
                         </div>
 
-                        <h1 className="text-3xl sm:text-4xl font-bold text-white tracking-tight mb-2">
+                        <h1 className="text-2xl sm:text-3xl font-semibold text-zinc-100 tracking-tight mb-2">
                             Overview & Engineering Hub
                         </h1>
-                        <p className="text-white/60 text-sm sm:text-base leading-relaxed">
+                        <p className="text-zinc-400 text-xs sm:text-sm leading-relaxed max-w-xl">
                             Track problem-solving milestones, revise core computer science subjects, inspect repositories, and launch technical assessments.
                         </p>
                     </div>
@@ -169,14 +169,14 @@ export const OverviewHub: React.FC<OverviewHubProps> = ({ activities, onAddActiv
                     <div className="flex flex-wrap items-center gap-3">
                         <button
                             onClick={() => navigate('/assessment/algoascent-test-assessment')}
-                            className="rig-chamfer-btn px-6 py-3.5 bg-[#FF3B1F] text-black font-bold text-xs sm:text-sm tracking-wide hover:bg-[#E63219] active:scale-[0.98] transition-all flex items-center gap-2 shadow-lg shadow-[#FF3B1F]/20"
+                            className="px-5 py-2.5 bg-[#FF3B1F] text-white font-medium text-xs sm:text-sm hover:bg-[#E63219] active:scale-[0.98] transition-all flex items-center gap-2 rounded-xl shadow-md shadow-[#FF3B1F]/20 cursor-pointer"
                         >
                             <span>Take Test Assessment</span>
                             <ArrowUpRight className="w-4 h-4" />
                         </button>
                         <button
                             onClick={() => navigate('/assessments')}
-                            className="px-5 py-3.5 bg-black/60 border border-white/15 hover:border-white/30 text-white font-bold text-xs sm:text-sm transition-all flex items-center gap-2"
+                            className="px-4 py-2.5 bg-white/5 border border-white/10 hover:border-white/20 text-zinc-300 hover:text-white font-medium text-xs sm:text-sm rounded-xl transition-all cursor-pointer"
                         >
                             <span>Assessment Studio</span>
                         </button>
@@ -184,7 +184,7 @@ export const OverviewHub: React.FC<OverviewHubProps> = ({ activities, onAddActiv
                 </div>
 
                 {/* Clean Metrics Strip */}
-                <div className="mt-8 pt-6 border-t border-white/10 grid grid-cols-2 sm:grid-cols-4 gap-4 font-mono text-xs text-white/60">
+                <div className="mt-6 pt-5 border-t border-white/10 grid grid-cols-2 sm:grid-cols-4 gap-4 text-xs text-zinc-400">
                     <div className="flex items-center gap-2">
                         <ActivityIcon className="w-3.5 h-3.5 text-[#FF3B1F]" />
                         <span>Solved: {activities.length} Questions</span>
@@ -204,7 +204,7 @@ export const OverviewHub: React.FC<OverviewHubProps> = ({ activities, onAddActiv
                 </div>
             </div>
 
-            {/* ── BRUTALIST TAB NAVIGATION (RIG.AI STYLE) ────────────────── */}
+            {/* ── MINIMAL TAB NAVIGATION ────────────────── */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                 {sections.map((s) => {
                     const isActive = activeSection === s.id;
@@ -214,37 +214,32 @@ export const OverviewHub: React.FC<OverviewHubProps> = ({ activities, onAddActiv
                             key={s.id}
                             onClick={() => setActiveSection(s.id)}
                             className={`
-                                relative p-4 text-left transition-all duration-200 border
+                                relative p-4 text-left transition-all duration-200 border rounded-xl cursor-pointer
                                 ${isActive
-                                    ? 'bg-[#14141C] border-[#FF3B1F] text-white shadow-lg'
-                                    : 'bg-[#0A0A0E] border-white/10 hover:border-white/20 hover:bg-[#0E0E14] text-white/60'
+                                    ? 'bg-[#14141E] border-[#FF3B1F]/80 text-zinc-100 shadow-md shadow-[#FF3B1F]/10'
+                                    : 'bg-[#0A0A0E] border-white/10 hover:border-white/20 hover:bg-[#0E0E14] text-zinc-400'
                                 }
                             `}
                         >
-                            {/* Active Top Red Notch */}
-                            {isActive && (
-                                <div className="absolute top-0 left-0 right-0 h-1 bg-[#FF3B1F]" />
-                            )}
-
-                            <div className="flex items-center justify-between mb-3">
+                            <div className="flex items-center justify-between mb-2.5">
                                 <div className={`
-                                    w-8 h-8 flex items-center justify-center border transition-colors
+                                    w-7 h-7 rounded-lg flex items-center justify-center border transition-colors
                                     ${isActive 
-                                        ? 'bg-[#FF3B1F] text-black border-[#FF3B1F]' 
-                                        : 'bg-black text-white/60 border-white/10'
+                                        ? 'bg-[#FF3B1F] text-white border-[#FF3B1F]' 
+                                        : 'bg-white/5 text-zinc-400 border-white/10'
                                     }
                                 `}>
-                                    <Icon className="w-4 h-4" />
+                                    <Icon className="w-3.5 h-3.5" />
                                 </div>
-                                <span className="font-mono text-xs text-[#FF3B1F] font-bold">
+                                <span className="font-mono text-[11px] text-[#FF3B1F] font-medium">
                                     {s.code} //
                                 </span>
                             </div>
 
-                            <div className="font-bold text-sm text-white tracking-wide">
+                            <div className="font-medium text-xs sm:text-sm text-zinc-200 tracking-normal">
                                 {s.label}
                             </div>
-                            <div className="text-xs text-white/40 mt-1 truncate">
+                            <div className="text-[11px] text-zinc-500 mt-0.5 truncate">
                                 {s.sublabel}
                             </div>
                         </button>
