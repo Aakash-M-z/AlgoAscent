@@ -113,7 +113,7 @@ const SolutionResources: React.FC = () => {
                 {/* Problem header */}
                 <div style={{ padding: '16px 20px', borderBottom: '1px solid rgba(255,255,255,0.05)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
                   <div>
-                    <div style={{ fontSize: '0.95rem', fontWeight: 700, color: '#EAEAEA' }}>{problem.name}</div>
+                    <div style={{ fontSize: '0.95rem', fontWeight: 500, color: '#EDEDED', letterSpacing: '-0.01em' }}>{problem.name}</div>
                     <div className="kpi-sub" style={{ marginTop: '2px' }}>{problem.category}</div>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
