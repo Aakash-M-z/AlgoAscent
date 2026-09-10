@@ -22,6 +22,7 @@ const AssessmentLandingPage = React.lazy(() => import('../features/assessment/As
 const AssessmentTakingSession = React.lazy(() => import('../features/assessment/AssessmentTakingSession'));
 const AssessmentResultPage = React.lazy(() => import('../features/assessment/AssessmentResultPage'));
 const MyAssessmentsPage = React.lazy(() => import('../features/assessment/MyAssessmentsPage'));
+const PricingPage = React.lazy(() => import('../pages/PricingPage').then(m => ({ default: m.PricingPage })));
 
 // Import actual components to render as children (since we want them rendered inside the lazy boundaries)
 import TaskManager from '../components/TaskManager';
@@ -99,6 +100,13 @@ const AppRoutes: React.FC<AppRoutesProps> = ({ overviewTabNode }) => {
         <Route path="/" element={
           <Suspense fallback={<PageLoader />}>
             <LandingPage />
+          </Suspense>
+        } />
+
+        {/* PRICING & SUBSCRIPTIONS */}
+        <Route path="/pricing" element={
+          <Suspense fallback={<PageLoader />}>
+            <PricingPage />
           </Suspense>
         } />
 
