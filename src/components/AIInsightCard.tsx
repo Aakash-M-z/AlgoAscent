@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Brain, TrendingUp, AlertTriangle, Lightbulb, ChevronRight, Lock, X } from 'lucide-react';
 import { Activity } from '../types';
+import { PricingModal } from './PricingModal';
 
 interface Props { activities: Activity[]; isDemo?: boolean; }
 interface Insight { icon: React.ReactNode; text: string; color: string; bg: string; premium?: boolean; }
@@ -134,58 +135,32 @@ const AIInsightCard: React.FC<Props> = ({ activities, isDemo = false }) => {
                                 <p style={{ fontSize: '0.82rem', color: '#BDBDBD', margin: 0, lineHeight: 1.55, flex: 1 }}>{ins.text}</p>
                                 <ChevronRight size={12} color={ins.color} style={{ flexShrink: 0, marginTop: '2px', opacity: 0.5 }} />
                             </div>
-                            {/* Premium lock overlay */}
-                            {ins.premium && (
-                                <motion.div
-                                    initial={{ opacity: 0 }}
-                                    animate={{ opacity: 1 }}
-                                    transition={{ delay: 0.3 }}
-                                    onClick={() => setPremiumModal(true)}
-                                    style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', cursor: 'pointer', borderRadius: '9px', background: 'rgba(8,8,8,0.55)', backdropFilter: 'blur(1px)' }}
-                                >
-                                    <Lock size={13} color="#D4AF37" />
-                                    <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#D4AF37' }}>Premium</span>
-                                    <span style={{ fontSize: '0.68rem', color: '#555', padding: '1px 7px', borderRadius: '999px', border: '1px solid rgba(212,175,55,0.2)', background: 'rgba(212,175,55,0.06)' }}>Unlock →</span>
-                                </motion.div>
-                            )}
-                        </motion.div>
-                    ))}
-                </div>
-            </motion.div>
+                                {/* Premium lock overlay */}
+                                {ins.premium && (
+                                    <motion.div
+                                        initial={{ opacity: 0 }}
+                                        animate={{ opacity: 1 }}
+                                        transition={{ delay: 0.3 }}
+                                        onClick={() => setPremiumModal(true)}
+                                        style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', cursor: 'pointer', borderRadius: '9px', background: 'rgba(8,8,8,0.7)', backdropFilter: 'blur(1px)' }}
+                                    >
+                                        <Lock size={13} color="#FF3B1F" />
+                                        <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#FF3B1F' }}>Pro Insight</span>
+                                        <span style={{ fontSize: '0.68rem', color: '#FF3B1F', padding: '1px 8px', borderRadius: '999px', border: '1px solid rgba(255,59,31,0.3)', background: 'rgba(255,59,31,0.1)' }}>Unlock Pro →</span>
+                                    </motion.div>
+                                )}
+                            </motion.div>
+                        ))}
+                    </div>
+                </motion.div>
 
-            {/* Premium modal */}
-            <AnimatePresence>
-                {premiumModal && (
-                    <motion.div
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
-                        onClick={() => setPremiumModal(false)}
-                        style={{ position: 'fixed', inset: 0, zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)' }}
-                    >
-                        <motion.div
-                            initial={{ scale: 0.9, opacity: 0, y: 20 }}
-                            animate={{ scale: 1, opacity: 1, y: 0 }}
-                            exit={{ scale: 0.9, opacity: 0, y: 20 }}
-                            transition={{ type: 'spring', stiffness: 300, damping: 25 }}
-                            onClick={e => e.stopPropagation()}
-                            style={{ background: '#111', border: '1px solid rgba(212,175,55,0.3)', borderRadius: '18px', padding: '32px 28px', maxWidth: '380px', width: '90%', position: 'relative', textAlign: 'center' }}
-                        >
-                            <button onClick={() => setPremiumModal(false)} style={{ position: 'absolute', top: '14px', right: '14px', background: 'none', border: 'none', color: '#444', cursor: 'pointer' }}><X size={16} /></button>
-                            <div style={{ fontSize: '2.5rem', marginBottom: '12px' }}>👑</div>
-                            <div style={{ fontSize: '1.1rem', fontWeight: 800, color: '#D4AF37', marginBottom: '8px' }}>Premium AI Coaching</div>
-                            <div style={{ fontSize: '0.82rem', color: '#666', lineHeight: 1.6, marginBottom: '20px' }}>
-                                Unlock deep pattern analysis, personalized study plans, interview readiness scores, and weekly AI-generated roadmaps tailored to your weak areas.
-                            </div>
-                            <div style={{ padding: '10px 20px', borderRadius: '10px', background: 'rgba(212,175,55,0.08)', border: '1px solid rgba(212,175,55,0.2)', fontSize: '0.78rem', color: '#D4AF37', fontWeight: 600 }}>
-                                🚀 Premium coming soon — stay tuned
-                            </div>
-                        </motion.div>
-                    </motion.div>
-                )}
-            </AnimatePresence>
-        </>
-    );
-};
+                <PricingModal
+                    isOpen={premiumModal}
+                    onClose={() => setPremiumModal(false)}
+                    initialPlan="annual"
+                />
+            </>
+        );
+    };
 
-export default AIInsightCard;
+    export default AIInsightCard;

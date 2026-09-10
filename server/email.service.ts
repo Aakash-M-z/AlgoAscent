@@ -19,7 +19,8 @@ import {
     emailVerificationTemplate, 
     accountDeactivatedTemplate, 
     accountActivatedTemplate,
-    assessmentAssignedTemplate
+    assessmentAssignedTemplate,
+    paymentReceiptTemplate
 } from './email.templates.js';
 import { PasswordResetTokenModel } from './models.js';
 
@@ -198,6 +199,37 @@ export async function sendAssessmentAssignedEmail(
             assessmentUrl
         ),
         tag: 'assessment-assigned',
+    });
+}
+
+export async function sendPaymentReceiptEmail(
+    email: string,
+    username: string,
+    planName: string,
+    amount: number,
+    orderId: string,
+    paymentId: string,
+    expiresAtFormatted: string
+): Promise<boolean> {
+    const dateFormatted = new Date().toLocaleString('en-IN', {
+        timeZone: 'Asia/Kolkata',
+        dateStyle: 'medium',
+        timeStyle: 'short'
+    });
+
+    return send({
+        to: email,
+        subject: `Payment Receipt: Welcome to ${planName} 👑`,
+        html: paymentReceiptTemplate(
+            username,
+            planName,
+            amount,
+            orderId,
+            paymentId,
+            dateFormatted,
+            expiresAtFormatted
+        ),
+        tag: 'payment-receipt',
     });
 }
 

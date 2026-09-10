@@ -21,6 +21,18 @@
       "aiUsageResetAt": "2026-03-20",
       "id": "2",
       "createdAt": "2026-02-09T05:54:51.082Z"
+    },
+    {
+      "username": "aakashext",
+      "email": "aakashext@gmail.com",
+      "password": ".ikmv19phlqg",
+      "role": "user",
+      "plan": "free",
+      "aiUsageCount": 0,
+      "aiUsageResetAt": "2026-09-09",
+      "isActive": true,
+      "id": "3",
+      "createdAt": "2026-09-09T10:48:49.194Z"
     }
   ],
   "activities": [
@@ -71,5 +83,10 @@
       "id": "1",
       "completedAt": "2026-03-18T22:53:09.422Z"
     }
-  ]
+  ],
+  "problemReviews": [],
+  "jobResults": [],
+  "connectedAccounts": [],
+  "contests": [],
+  "contestReminders": []
 }

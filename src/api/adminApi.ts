@@ -205,5 +205,31 @@ export const adminApi = {
         return [
             { action: 'STORAGE_ACTIVE', detail: 'Local & cloud storage operating normally', createdAt: new Date().toISOString() }
         ];
+    },
+
+    // 8. Payment Verification & Management
+    getPayments: async (status?: string, page: number = 1, limit: number = 50) => {
+        const res = await api.get('/admin/payments', {
+            params: { status, page, limit }
+        });
+        return res.data;
+    },
+
+    getPaymentDetails: async (paymentId: string) => {
+        const res = await api.get(`/admin/payments/${paymentId}`);
+        return res.data;
+    },
+
+    approvePayment: async (paymentId: string, adminNote?: string) => {
+        const res = await api.post(`/admin/payments/${paymentId}/approve`, { adminNote });
+        return res.data;
+    },
+
+    rejectPayment: async (paymentId: string, rejectionReason: string, adminNote?: string) => {
+        const res = await api.post(`/admin/payments/${paymentId}/reject`, {
+            rejectionReason,
+            adminNote
+        });
+        return res.data;
     }
 };

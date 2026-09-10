@@ -66,10 +66,15 @@ app.use(cors({
         'http://localhost:3000',
     ],
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'x-admin-id', 'x-user-id'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'x-admin-id', 'x-user-id', 'x-razorpay-signature'],
     credentials: true,
 }));
-app.use(express.json({ limit: '2mb' }));  // prevent oversized payloads
+app.use(express.json({
+    limit: '2mb',
+    verify: (req: any, _res, buf) => {
+        req.rawBody = buf.toString('utf8');
+    }
+}));
 app.use(cookieParser());
 
 // COOP headers — required for Google OAuth popup (window.closed) to work
@@ -1256,6 +1261,13 @@ api.use('/interview', interviewRoutes);
 // AI Mentor routes
 import mentorRoutes from './mentorRoutes.js';
 api.use('/mentor', mentorRoutes);
+
+// Payment & Subscription routes (Razorpay)
+import paymentRoutes from './paymentRoutes.js';
+api.use('/payments', (req, res, next) => {
+    if (req.path === '/config') return next();
+    return requireAuth(req, res, next);
+}, paymentRoutes);
 
 // ── Problems API ──────────────────────────────────────────────────────────────
 import { ProblemModel } from './models.js';
