@@ -730,5 +730,64 @@ router.get('/interview-analytics', async (req, res) => {
     }
 });
 
+// ═════════════════════════════════════════════════════════════════════════════
+// PAYMENT VERIFICATION & MANAGEMENT
+// ═════════════════════════════════════════════════════════════════════════════
+
+import { PaymentService } from './services/payment/payment.service.js';
+
+// ── GET /admin/payments — List payments with status filter ───────────────────
+router.get('/payments', async (req: Request, res: Response) => {
+    try {
+        const { status, limit, page } = req.query;
+        const result = await PaymentService.listPayments(
+            status as string,
+            limit ? parseInt(limit as string, 10) : 50,
+            page ? parseInt(page as string, 10) : 1
+        );
+        res.json(result);
+    } catch (err: any) {
+        res.status(500).json({ error: err.message || 'Failed to list payments' });
+    }
+});
+
+// ── GET /admin/payments/:paymentId — Single payment details & audit trail ────
+router.get('/payments/:paymentId', async (req: Request, res: Response) => {
+    try {
+        const paymentId = String(req.params.paymentId);
+        const result = await PaymentService.getPaymentDetails(paymentId);
+        res.json(result);
+    } catch (err: any) {
+        res.status(404).json({ error: err.message || 'Payment details not found' });
+    }
+});
+
+// ── POST /admin/payments/:paymentId/approve — Approve Payment ────────────────
+router.post('/payments/:paymentId/approve', async (req: Request, res: Response) => {
+    try {
+        const paymentId = String(req.params.paymentId);
+        const admin = (req as any).adminUser || { id: 'admin', email: 'admin@algoascent.dev' };
+        const { adminNote } = req.body;
+        const result = await PaymentService.approvePayment(paymentId, admin, adminNote);
+        await logAction(req, 'PAYMENT_APPROVE', paymentId, '', `Approved payment for order ${result.orderId}`);
+        res.json(result);
+    } catch (err: any) {
+        res.status(400).json({ error: err.message || 'Failed to approve payment' });
+    }
+});
+
+// ── POST /admin/payments/:paymentId/reject — Reject Payment ──────────────────
+router.post('/payments/:paymentId/reject', async (req: Request, res: Response) => {
+    try {
+        const paymentId = String(req.params.paymentId);
+        const admin = (req as any).adminUser || { id: 'admin', email: 'admin@algoascent.dev' };
+        const { rejectionReason, adminNote } = req.body;
+        const result = await PaymentService.rejectPayment(paymentId, admin, rejectionReason, adminNote);
+        await logAction(req, 'PAYMENT_REJECT', paymentId, '', `Rejected payment for order ${result.orderId}: ${rejectionReason}`);
+        res.json(result);
+    } catch (err: any) {
+        res.status(400).json({ error: err.message || 'Failed to reject payment' });
+    }
+});
 
 export default router;
