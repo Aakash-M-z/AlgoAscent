@@ -2,6 +2,9 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate, NavLink } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { usePlan } from '../hooks/usePlan';
+import { PricingModal } from './PricingModal';
+import { Crown, Sparkles } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 interface HeaderProps {
@@ -71,9 +74,11 @@ const LogoutModal: React.FC<{ onConfirm: () => void; onCancel: () => void }> = (
 /* ── Header ──────────────────────────────────────────────────── */
 const Header: React.FC<HeaderProps> = ({ onMenuToggle }) => {
   const { user, logout } = useAuth();
+  const { isPremium } = usePlan();
   const routerNavigate = useNavigate();
   const [showDropdown, setShowDropdown] = useState(false);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
+  const [pricingOpen, setPricingOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   // Close on outside click
@@ -107,6 +112,7 @@ const Header: React.FC<HeaderProps> = ({ onMenuToggle }) => {
 
   const menuItems = [
     { label: 'My Assessments', icon: '📝', path: '/dashboard/assessments' },
+    { label: 'Pricing & Plans', icon: '💎', path: '/pricing' },
     { label: 'Profile', icon: '◉', path: '/dashboard/profile' },
   ];
 
@@ -124,6 +130,7 @@ const Header: React.FC<HeaderProps> = ({ onMenuToggle }) => {
     { label: 'Overview', path: '/dashboard' },
     { label: 'Assessments', path: user?.role === 'admin' ? '/dashboard/admin/assessments' : '/dashboard/assessments' },
     { label: user?.role === 'admin' ? 'Interview Analytics' : 'Mock Interview', path: '/dashboard/interview' },
+    { label: 'Pricing', path: '/pricing' },
     { label: 'Resources', path: '/dashboard/resources' },
   ];
 
@@ -135,6 +142,11 @@ const Header: React.FC<HeaderProps> = ({ onMenuToggle }) => {
           onCancel={() => setShowLogoutModal(false)}
         />
       )}
+
+      <PricingModal
+        isOpen={pricingOpen}
+        onClose={() => setPricingOpen(false)}
+      />
 
       <header
         className="sticky top-0 z-50"
@@ -169,28 +181,28 @@ const Header: React.FC<HeaderProps> = ({ onMenuToggle }) => {
                 </svg>
               </div>
               <div className="hidden sm:block">
-                <h1 className="text-sm font-bold text-white tracking-wide leading-tight">
+                <h1 className="text-sm font-semibold text-zinc-100 tracking-tight leading-tight">
                   Algo<span className="text-[#FF3B1F]">Ascent</span>
                 </h1>
-                <p className="text-[10px] text-white/40 uppercase tracking-widest font-mono">
-                  Engineering Platform
+                <p className="text-[10px] text-zinc-500 font-medium tracking-wide">
+                  {user?.role === 'admin' ? 'Enterprise Core' : 'Mastery Matrix'}
                 </p>
               </div>
             </div>
           </div>
  
           {/* Navigation Links */}
-          <nav className="hidden md:flex items-center gap-6 h-full font-mono">
+          <nav className="hidden md:flex items-center gap-7 h-full font-sans">
             {navItems.map(item => (
               <NavLink
                 key={item.path}
                 to={item.path}
                 end={item.path === '/dashboard'}
                 className={({ isActive }) => `
-                  h-full flex items-center px-1 border-b-2 text-xs font-semibold uppercase tracking-wider transition-all duration-200
+                  h-full flex items-center px-1 border-b-2 text-[13px] font-medium transition-all duration-200
                   ${isActive
-                    ? 'border-[#FF3B1F] text-white drop-shadow-[0_0_8px_rgba(255,59,31,0.3)]'
-                    : 'border-transparent text-white/45 hover:text-white hover:border-white/15'
+                    ? 'border-[#FF3B1F] text-zinc-100'
+                    : 'border-transparent text-zinc-400 hover:text-zinc-200 hover:border-white/15'
                   }
                 `}
               >
@@ -201,6 +213,22 @@ const Header: React.FC<HeaderProps> = ({ onMenuToggle }) => {
 
           {/* Right side */}
           <div className="flex items-center gap-3">
+
+            {/* Pro Badge or Upgrade CTA */}
+            {isPremium ? (
+              <div className="hidden sm:flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-[#FF3B1F]/15 border border-[#FF3B1F]/30 text-[#FF3B1F]">
+                <Crown size={12} />
+                <span>PRO</span>
+              </div>
+            ) : (
+              <button
+                onClick={() => setPricingOpen(true)}
+                className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#FF3B1F] hover:bg-[#E63219] text-white text-xs font-medium transition-all shadow-sm cursor-pointer"
+              >
+                <Crown size={12} />
+                <span>Upgrade</span>
+              </button>
+            )}
 
             {/* User Avatar Dropdown Button */}
             <div ref={dropdownRef} style={{ position: 'relative' }}>
