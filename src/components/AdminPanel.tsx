@@ -14,15 +14,17 @@ import AuditLogTimeline from '../features/admin/components/AuditLogTimeline';
 import NotificationsSender from '../features/admin/components/NotificationsSender';
 import InterviewAnalyticsDashboard from '../features/admin/components/InterviewAnalyticsDashboard';
 import AdminAssessmentManager from '../features/admin/components/assessments/AdminAssessmentManager';
+import PaymentApprovals from '../features/admin/components/PaymentApprovals';
 
-type AdminTab = 'analytics' | 'assessments' | 'users' | 'ai' | 'security' | 'system';
+type AdminTab = 'analytics' | 'assessments' | 'users' | 'payments' | 'ai' | 'security' | 'system';
 
-const VALID_TABS: AdminTab[] = ['analytics', 'assessments', 'users', 'ai', 'security', 'system'];
+const VALID_TABS: AdminTab[] = ['analytics', 'assessments', 'users', 'payments', 'ai', 'security', 'system'];
 
 const tabs: { id: AdminTab; label: string; icon: string }[] = [
     { id: 'analytics', label: 'Analytics', icon: '📈' },
     { id: 'assessments', label: 'Assessment Studio', icon: '◈' },
     { id: 'users', label: 'Users', icon: '👥' },
+    { id: 'payments', label: 'Payment Approvals', icon: '💳' },
     { id: 'ai', label: 'AI Console', icon: '🤖' },
     { id: 'security', label: 'Security & Logs', icon: '🛡️' },
     { id: 'system', label: 'System Control', icon: '⚙️' },
@@ -104,6 +106,8 @@ const AdminPanel: React.FC = () => {
                     {activeTab === 'assessments' && <AdminAssessmentManager />}
 
                     {activeTab === 'users' && <UsersTable />}
+
+                    {activeTab === 'payments' && <PaymentApprovals />}
 
                     {activeTab === 'ai' && <AIUsageMonitoring />}
 
